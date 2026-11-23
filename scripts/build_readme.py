@@ -93,7 +93,24 @@ def main() -> None:
                 f"{max(inst['route_steps'])} steps with {min(inst['litho_visits'])}–{max(inst['litho_visits'])} "
                 f"litho visits**, {inst['release_lots_per_day']:.1f} lot starts/day + "
                 f"{inst['hot_lots_per_day']:.2f} hot lots/day.")
-    out = (tpl.replace("{{HEADLINE}}", headline).replace("{{CV}}", cv).replace("{{INSTANCE}}", instance)
+    warm = ""
+    if (RES / "warmup" / "summary.md").exists():
+        warm = "**Warm-up sensitivity.** MSER-5 points at a slightly later truncation than the 30 days used, so the key comparison was repeated with 40 days on the same seeds:
+
+" + md("warmup/summary.md")
+    gp_txt = ("Not run.")
+    if (RES / "learned" / "gp.json").exists():
+        g = j("learned/gp.json")
+        b = g["best_baseline"]
+        d = g[f"vs_{b}_pct"]
+        verdict = ("It **beats** the best baseline on held-out seeds." if g["beats_best_baseline"] else
+                   "It does **not** beat the best baseline on held-out seeds, so it is not used anywhere else in this project.")
+        gp_txt = (f"`learned/gp_dispatch.py` evolves a priority expression over normalised lot features (slack, processing time, "
+                  f"remaining work, waiting time, weight, Q-time left, critical ratio) by tree GP with fitness measured on "
+                  f"training seeds, then tests the best rule on {g['test_reps']} held-out seeds. Best rule: `{g['expr']}`. "
+                  f"Held-out weighted tardiness {g['gp']['mean']:.2f} ± {g['gp']['hw']:.2f} h vs {b} "
+                  f"{g[b]['mean']:.2f} ± {g[b]['hw']:.2f} h (paired change {d['mean']:+.1f}% ± {d['hw']:.1f}%). {verdict}")
+    out = (tpl.replace("{{WARMUP}}", warm).replace("{{GP}}", gp_txt).replace("{{HEADLINE}}", headline).replace("{{CV}}", cv).replace("{{INSTANCE}}", instance)
            .replace("{{DISPATCH}}", md("dispatch/summary.md")).replace("{{EXACT}}", md("exact/summary.md"))
            .replace("{{OHT}}", md("oht/summary.md")).replace("{{MAINT}}", md("maintenance/summary.md"))
            .replace("{{HEADTABLE}}", md("headline/summary.md"))

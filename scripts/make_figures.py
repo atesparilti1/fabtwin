@@ -73,8 +73,8 @@ def fig_exact() -> None:
         ax.bar([i + w for i in x], alns_gap, w, color=ACCENT, label="ALNS")
         ax.set_xticks(list(x), names, rotation=30, ha="right")
         ax.set_ylabel("gap to CP-SAT optimum (%)")
-        ax.legend(frameon=False, ncols=3, loc="upper left")
-        ax.set_title("Small instances with proven optima (non-zero optimum only)", loc="left", fontsize=10)
+        ax.legend(frameon=False, ncols=3, loc="lower left", bbox_to_anchor=(0, 1.0))
+        ax.set_title("Small instances with proven optima (non-zero optimum only)", loc="left", fontsize=10, pad=22)
         fig.savefig(FIG / "exact_gaps.png")
         plt.close(fig)
     if scaling:
@@ -85,15 +85,22 @@ def fig_exact() -> None:
         ops = sorted(by)
         for key, lbl, c in (("best_rule", "best rule", MUTED), ("sbh", "SBH", ACCENT2),
                             ("alns", "ALNS (30 s)", ACCENT), ("cpsat_obj", "CP-SAT (60 s)", INK)):
-            ys = [sum((x[key] or 0) for x in by[o]) / len(by[o]) for o in ops]
-            ax.plot(ops, ys, marker="o", color=c, label=lbl, lw=1.4, ms=3)
+            xs = [o for o in ops if all(x[key] is not None for x in by[o])]
+            ys = [sum(x[key] for x in by[o]) / len(by[o]) for o in xs]
+            ax.plot(xs, ys, marker="o", color=c, label=lbl, lw=1.4, ms=3)
+        miss = [o for o in ops if any(x["cpsat_obj"] is None for x in by[o])]
+        for o in miss:
+            ax.annotate("CP-SAT: no solution in 60 s\n(at least one seed)", (o, ax.get_ylim()[0]),
+                        fontsize=6.5, color=MUTED,
+                        ha="center", va="bottom", xytext=(0, 4), textcoords="offset points")
         lb = [sum(x["cpsat_bound"] for x in by[o]) / len(by[o]) for o in ops]
         ax.plot(ops, lb, ls="--", color=INK, lw=1, label="CP-SAT lower bound")
         ax.set_xlabel("operations")
         ax.set_ylabel("weighted tardiness (units)")
-        ax.set_yscale("symlog")
+        ax.set_yscale("log")
         ax.legend(frameon=False, fontsize=7)
-        ax.set_title("Scaling", loc="left", fontsize=10)
+        ax.set_title("Scaling (CP-SAT line ends where a seed found\nno solution within 60 s)",
+                     loc="left", fontsize=9)
         fig.savefig(FIG / "scaling.png")
         plt.close(fig)
 
@@ -106,10 +113,13 @@ def fig_pareto_conv() -> None:
         fr = sorted(par["front"], key=lambda p: p["flow_h"])
         ax.plot([p["flow_h"] for p in fr], [p["wt"] for p in fr], "-o", color=INK, ms=3, lw=1.2,
                 label="exact front (CP-SAT ε-constraint)")
+        groups: dict[tuple[float, float], list[str]] = {}
         for m in par["methods"]:
-            ax.scatter(m["flow_h"], m["wt"], color=ACCENT if m["method"] == "ALNS" else ACCENT2, s=18, zorder=3)
-            ax.annotate(m["method"], (m["flow_h"], m["wt"]), fontsize=7, color=MUTED,
-                        xytext=(4, 2), textcoords="offset points")
+            groups.setdefault((round(m["flow_h"], 4), m["wt"]), []).append(m["method"])
+        for i, ((fx, wy), names) in enumerate(sorted(groups.items())):
+            ax.scatter(fx, wy, color=ACCENT if "ALNS" in names else ACCENT2, s=18, zorder=3)
+            ax.annotate(", ".join(names), (fx, wy), fontsize=7, color=MUTED,
+                        xytext=(4, 4 + 9 * (i % 2)), textcoords="offset points")
         ax.set_xlabel("mean flow time (h/lot)")
         ax.set_ylabel("weighted tardiness")
         ax.legend(frameon=False, fontsize=7)
@@ -154,6 +164,8 @@ def fig_ops() -> None:
                                      ("cycle time (days)", "unplanned down (%)"), (1, 100)):
             ci_bars(ax, labels, [scale * r[k]["mean"] for r in mnt["rows"]],
                     [scale * r[k]["hw"] for r in mnt["rows"]], highlight={"Robust PM"}, xlabel=lbl)
+            if ax is not axes[0]:
+                ax.set_yticks([])
         fig.suptitle(f"Maintenance policies, {mnt['validation_reps']} fresh replications",
                      x=0.01, ha="left", fontsize=10)
         fig.savefig(FIG / "maintenance.png")

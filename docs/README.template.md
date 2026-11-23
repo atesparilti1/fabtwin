@@ -89,6 +89,8 @@ $$\min \sum_j w_j T_j \quad \text{s.t.}\quad \sum_{m\in M_o} x_{om}=1,\ \ S_{o_{
 
 ![Warm-up](docs/figures/warmup.png)
 
+{{WARMUP}}
+
 ---
 
 ## Results
@@ -117,6 +119,8 @@ $$\min \sum_j w_j T_j \quad \text{s.t.}\quad \sum_{m\in M_o} x_{om}=1,\ \ S_{o_{
 
 ![OHT](docs/figures/oht.png)
 
+**Reading.** Hungarian assignment shortens the wait for a vehicle most when the fleet is tight (3 vehicles, about 50% utilised) and the advantage disappears as the fleet grows. Fab-level KPIs (Q-time violations, cycle time) do not change significantly. In this fab a move takes about 1.5–2 minutes, against a cycle time of days, and Q-time violations are driven by furnace queueing rather than transport. The transport layer still matters for the twin (Q-time feasibility, congestion, deadlock-freedom), but it is not where the cycle-time gains come from. That is reported as measured.
+
 ### Step 5: maintenance under uncertainty, robust vs nominal
 
 {{MAINT}}
@@ -130,6 +134,10 @@ $$\min \sum_j w_j T_j \quad \text{s.t.}\quad \sum_{m\in M_o} x_{om}=1,\ \ S_{o_{
 {{HEADTABLE}}
 
 ![Headline](docs/figures/headline.png)
+
+### Stretch goal: evolved dispatching rules (genetic programming)
+
+{{GP}}
 
 ---
 
@@ -157,7 +165,7 @@ React + TypeScript + Vite + Tailwind + react-three-fiber/drei with bloom. It rep
 * **Releases** follow a renewal process with CV 1 (no CONWIP or start-rate control). The operating point is chosen so the fab is stable over 300 days on several instance seeds; the x-factor (about 1.9–2.2) is lower than in many real fabs because there are fewer sources of variability.
 * **Static instances** for exact methods are WIP snapshots with 0.1 h time resolution and deterministic durations; the MIP horizon is 1.25× the best heuristic makespan.
 * **ALNS** is limited by its schedule-generation scheme (see the gap table). It is reported as measured.
-* **Optional RL / genetic-programming dispatching** was not run, so nothing is reported for it.
+* **Learned dispatching (stretch goal):** see the section below; it is reported only if it beats the best baseline on held-out seeds.
 
 ---
 
