@@ -1,0 +1,105 @@
+{
+ "reps": 200,
+ "warmups_days": [
+  30,
+  40
+ ],
+ "rows": [
+  {
+   "warmup_days": 30,
+   "rule": "CR",
+   "mean_ct_days": {
+    "mean": 4.445655362189063,
+    "hw": 0.06032306924640519
+   },
+   "mean_weighted_tardiness_h": {
+    "mean": 2.745352137516114,
+    "hw": 0.6722784068753728
+   },
+   "on_time_pct": {
+    "mean": 80.47949066384024,
+    "hw": 2.8692864260307833
+   },
+   "throughput_per_day": {
+    "mean": 20.523444444444443,
+    "hw": 0.061545625652511995
+   }
+  },
+  {
+   "warmup_days": 30,
+   "rule": "ATCS",
+   "mean_ct_days": {
+    "mean": 3.9250960395474164,
+    "hw": 0.02700020753081462
+   },
+   "mean_weighted_tardiness_h": {
+    "mean": 0.32892299381156065,
+    "hw": 0.09647230620958656
+   },
+   "on_time_pct": {
+    "mean": 96.53529522607234,
+    "hw": 0.8228743170818328
+   },
+   "throughput_per_day": {
+    "mean": 20.573,
+    "hw": 0.06866502558320023
+   }
+  },
+  {
+   "warmup_days": 40,
+   "rule": "CR",
+   "mean_ct_days": {
+    "mean": 4.4644616909158765,
+    "hw": 0.06531711074784362
+   },
+   "mean_weighted_tardiness_h": {
+    "mean": 2.9295738882750286,
+    "hw": 0.7405470765083632
+   },
+   "on_time_pct": {
+    "mean": 79.46165961853355,
+    "hw": 3.1428680194707184
+   },
+   "throughput_per_day": {
+    "mean": 20.5420625,
+    "hw": 0.06377462129948372
+   }
+  },
+  {
+   "warmup_days": 40,
+   "rule": "ATCS",
+   "mean_ct_days": {
+    "mean": 3.928560730329683,
+    "hw": 0.029377532580781518
+   },
+   "mean_weighted_tardiness_h": {
+    "mean": 0.3277134298448709,
+    "hw": 0.10236545613235365
+   },
+   "on_time_pct": {
+    "mean": 96.44252971741767,
+    "hw": 0.9035754959011142
+   },
+   "throughput_per_day": {
+    "mean": 20.5888125,
+    "hw": 0.07220449255173052
+   }
+  }
+ ],
+ "atcs_vs_cr_mean_ct_days_30d": {
+  "mean": -11.709394458893042,
+  "hw": 0.8106357884521859
+ },
+ "atcs_vs_cr_mean_weighted_tardiness_h_30d": {
+  "mean": -88.01891424722085,
+  "hw": 21.8038128483657
+ },
+ "atcs_vs_cr_mean_ct_days_40d": {
+  "mean": -12.003708345770445,
+  "hw": 0.8803609332945156
+ },
+ "atcs_vs_cr_mean_weighted_tardiness_h_40d": {
+  "mean": -88.81361445920612,
+  "hw": 22.63358967580344
+ }
+}
