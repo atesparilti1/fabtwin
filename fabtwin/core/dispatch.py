@@ -151,8 +151,7 @@ def compile_expr(expr: str) -> ScoreFn:
         return a / b if abs(b) > 1e-9 else a
 
     def score(c: Candidate, now: float, pbar: float) -> float:
-        env = _features(c, now, pbar)
-        env.update(min=min, max=max, pdiv=pdiv)
+        env: dict[str, object] = {**_features(c, now, pbar), "min": min, "max": max, "pdiv": pdiv}
         return float(eval(code, {"__builtins__": {}}, env))  # noqa: S307 (AST-whitelisted)
 
     return score
