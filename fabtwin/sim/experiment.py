@@ -28,7 +28,12 @@ class Replications:
 
 def _one(args: tuple[str, SimConfig]) -> tuple[dict[str, float], list[float]]:
     inst_json, cfg = args
-    res = simulate(_cached(inst_json), cfg)
+    planner = None
+    if cfg.plan_every_h > 0:  # rolling-horizon CP-SAT litho planning
+        from fabtwin.core.rolling import LithoPlanner
+
+        planner = LithoPlanner()
+    res = simulate(_cached(inst_json), cfg, planner=planner)
     return res.kpis, [float(n) for _, n in res.wip_series]
 
 
@@ -43,7 +48,7 @@ def _cached(inst_json: str) -> Instance:
 
 
 def replicate(inst: Instance, cfg: SimConfig, n: int, seed0: int = 1,
-              workers: int | None = None) -> Replications:
+              workers: int | None = None, label: str | None = None) -> Replications:
     """Run ``n`` replications with seeds ``seed0 .. seed0+n-1``.
 
     Using the same ``seed0`` for two policies gives common random numbers.
@@ -58,7 +63,7 @@ def replicate(inst: Instance, cfg: SimConfig, n: int, seed0: int = 1,
             out = list(ex.map(_one, jobs, chunksize=max(1, n // (4 * workers))))
     names = out[0][0].keys()
     kpis = {k: [o[0][k] for o in out] for k in names}
-    return Replications(cfg.rule, seeds, kpis, [o[1] for o in out])
+    return Replications(label or cfg.rule, seeds, kpis, [o[1] for o in out])
 
 
 def compare_table(reps: Sequence[Replications], kpis: Sequence[str],
