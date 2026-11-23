@@ -23,3 +23,9 @@ addopts = "-q"
 python_version = "3.12"
 strict = true
 ignore_missing_imports = true
+
+# OR-Tools' and HiGHS' bundled stubs lag their runtime APIs (CamelCase CP-SAT
+# methods, untyped Highs); the two solver-binding modules are checked leniently.
+[[tool.mypy.overrides]]
+module = ["fabtwin.core.cpsat", "fabtwin.core.mip", "fabtwin.core.decomposition"]
+disable_error_code = ["attr-defined", "arg-type", "no-untyped-call", "assignment", "index", "call-overload"]
