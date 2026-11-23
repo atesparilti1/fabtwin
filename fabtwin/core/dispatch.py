@@ -103,6 +103,61 @@ RULES: dict[str, ScoreFn] = {
 SETUP_RULES = frozenset({"ATCS"})
 
 
+EXPR_FEATURES = ("slack", "proc", "rem", "wait", "weight", "qleft", "cr")
+
+
+def _features(c: Candidate, now: float, pbar: float) -> dict[str, float]:
+    return {
+        "slack": (c.due - c.rem_work_h - now) / max(pbar, 1e-9),
+        "proc": c.proc_h / max(pbar, 1e-9),
+        "rem": c.rem_work_h / max(pbar, 1e-9),
+        "wait": (now - c.q_arrival) / max(pbar, 1e-9),
+        "weight": c.weight,
+        "qleft": ((c.q_deadline - now) / max(pbar, 1e-9)) if c.q_deadline is not None else 50.0,
+        "cr": (c.due - now) / max(c.rem_work_h, 1e-9),
+    }
+
+
+def compile_expr(expr: str) -> ScoreFn:
+    """Compile an arithmetic priority expression over EXPR_FEATURES (lower = first).
+
+    Only numbers, the feature names, + - * /, unary minus and min/max are
+    allowed (checked on the AST); division is protected (x / ~0 = x).
+    """
+    import ast
+
+    tree = ast.parse(expr, mode="eval")
+    allowed = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Add, ast.Sub, ast.Mult, ast.Div,
+               ast.USub, ast.Constant, ast.Name, ast.Load, ast.Call)
+    for node in ast.walk(tree):
+        if not isinstance(node, allowed):
+            raise ValueError(f"disallowed syntax in rule: {type(node).__name__}")
+        if isinstance(node, ast.Name) and node.id not in EXPR_FEATURES + ("min", "max", "pdiv"):
+            raise ValueError(f"unknown name {node.id!r}")
+        if isinstance(node, ast.Call) and not (isinstance(node.func, ast.Name)
+                                               and node.func.id in ("min", "max", "pdiv")):
+            raise ValueError("only min/max/pdiv calls are allowed")
+
+    class _Div(ast.NodeTransformer):
+        def visit_BinOp(self, node: ast.BinOp) -> ast.AST:
+            self.generic_visit(node)
+            if isinstance(node.op, ast.Div):
+                return ast.Call(func=ast.Name("pdiv", ast.Load()), args=[node.left, node.right], keywords=[])
+            return node
+
+    code = compile(ast.fix_missing_locations(_Div().visit(tree)), "<rule>", "eval")
+
+    def pdiv(a: float, b: float) -> float:
+        return a / b if abs(b) > 1e-9 else a
+
+    def score(c: Candidate, now: float, pbar: float) -> float:
+        env = _features(c, now, pbar)
+        env.update(min=min, max=max, pdiv=pdiv)
+        return float(eval(code, {"__builtins__": {}}, env))  # noqa: S307 (AST-whitelisted)
+
+    return score
+
+
 def rank_key(rule: ScoreFn, now: float, pbar: float) -> Callable[[Candidate], tuple[int, float, float, int]]:
     """Sort key: hot class first, then rule score, arrival, id."""
 

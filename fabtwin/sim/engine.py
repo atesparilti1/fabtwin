@@ -94,6 +94,7 @@ class SimConfig:
     trace_from_h: float | None = None  # record a replay trace from this time
     trace_to_h: float | None = None
     plan_every_h: float = 0.0  # >0: call ``planner`` periodically (rolling horizon)
+    rule_expr: str | None = None  # priority expression when rule == "EXPR"
 
 
 @dataclass
@@ -206,11 +207,16 @@ class Simulator:
     """Event-driven fab simulator. Use :func:`simulate` for one-shot runs."""
 
     def __init__(self, inst: Instance, cfg: SimConfig, planner: Any = None) -> None:
-        if cfg.rule not in RULES:
+        if cfg.rule != "EXPR" and cfg.rule not in RULES:
             raise ValueError(f"unknown rule {cfg.rule!r}; choose from {sorted(RULES)}")
         self.inst = inst
         self.cfg = cfg
-        self.rule = RULES[cfg.rule]
+        if cfg.rule == "EXPR":  # evolved priority rule (learned/gp_dispatch.py)
+            from fabtwin.core.dispatch import compile_expr
+
+            self.rule = compile_expr(cfg.rule_expr or "0")
+        else:
+            self.rule = RULES[cfg.rule]
         self.T = cfg.horizon_h if cfg.horizon_h is not None else inst.horizon_h
         self.W = cfg.warmup_h if cfg.warmup_h is not None else inst.warmup_h
         if not 0 <= self.W < self.T:
