@@ -4,7 +4,7 @@
 
 [Live demo](https://atesparilti1.github.io/fabtwin/) · [Technical write-up (PDF, 2 pages)](docs/fabtwin_writeup.pdf) · [Formulation](docs/formulation.md) · [Replay data format](web/DATA_FORMAT.md)
 
-![FabTwin landing page](docs/figures/site_landing.png)
+![FabTwin 3D twin replaying a 7-day simulation](docs/figures/site_twin.png)
 
 FabTwin optimises three coupled problems of a wafer fab under uncertainty and checks every policy in a discrete-event digital twin:
 
@@ -122,6 +122,8 @@ $$\min \sum_j w_j T_j \quad \text{s.t.}\quad \sum_{m\in M_o} x_{om}=1,\ \ S_{o_{
 {{MAINT}}
 
 ![Maintenance](docs/figures/maintenance.png)
+
+**Reading.** Both PM plans clearly beat run-to-failure. The simulation-selected ("robust") plan maintains every tool somewhat earlier than the availability-optimal ("nominal") plan, which turns unplanned downtime into planned downtime: it has fewer failures and much less unplanned litho downtime. Its cycle time and tardiness, however, are statistically indistinguishable from the nominal plan's. In this fab, PM is short compared with repairs and PM waits for the running job, so the analytical age-replacement plan is already close to the best plan in this policy class. The simulation study confirms that and shows the variance reduction; it does not reveal a large hidden gain. The selection objective (mean cycle time) and the screening are documented in `scripts/bench_maintenance.py`.
 
 ### Coupled fab: full policies
 
