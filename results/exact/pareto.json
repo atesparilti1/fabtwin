@@ -1,0 +1,55 @@
+{
+ "instance": "tiny-n8-k10-s3",
+ "front": [
+  {
+   "flow_h": 11.200000000000001,
+   "wt": 502.0,
+   "status": "OPTIMAL",
+   "cap": 896
+  },
+  {
+   "flow_h": 11.25,
+   "wt": 252.0,
+   "status": "OPTIMAL",
+   "cap": 937
+  },
+  {
+   "flow_h": 11.762500000000001,
+   "wt": 250.0,
+   "status": "OPTIMAL",
+   "cap": 942
+  }
+ ],
+ "methods": [
+  {
+   "method": "FIFO",
+   "flow_h": 11.475000000000001,
+   "wt": 383.0,
+   "qviol": 0
+  },
+  {
+   "method": "EDD",
+   "flow_h": 11.4375,
+   "wt": 383.0,
+   "qviol": 0
+  },
+  {
+   "method": "CR",
+   "flow_h": 11.475000000000001,
+   "wt": 383.0,
+   "qviol": 0
+  },
+  {
+   "method": "ATC",
+   "flow_h": 11.475000000000001,
+   "wt": 383.0,
+   "qviol": 0
+  },
+  {
+   "method": "ALNS",
+   "flow_h": 11.475000000000001,
+   "wt": 383.0,
+   "qviol": 0
+  }
+ ]
+}

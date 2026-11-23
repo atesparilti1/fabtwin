@@ -1,0 +1,55 @@
+{
+ "instance": "tiny-n8-k10-s3",
+ "x": "Mean flow time (h/lot)",
+ "y": "Weighted tardiness (units)",
+ "points": [
+  {
+   "method": "CP-SAT \u03b5-constraint",
+   "x": 11.200000000000001,
+   "y": 502.0,
+   "front": true
+  },
+  {
+   "method": "CP-SAT \u03b5-constraint",
+   "x": 11.25,
+   "y": 252.0,
+   "front": true
+  },
+  {
+   "method": "CP-SAT \u03b5-constraint",
+   "x": 11.762500000000001,
+   "y": 250.0,
+   "front": true
+  },
+  {
+   "method": "FIFO",
+   "x": 11.475000000000001,
+   "y": 383.0,
+   "front": false
+  },
+  {
+   "method": "EDD",
+   "x": 11.4375,
+   "y": 383.0,
+   "front": false
+  },
+  {
+   "method": "CR",
+   "x": 11.475000000000001,
+   "y": 383.0,
+   "front": false
+  },
+  {
+   "method": "ATC",
+   "x": 11.475000000000001,
+   "y": 383.0,
+   "front": false
+  },
+  {
+   "method": "ALNS",
+   "x": 11.475000000000001,
+   "y": 383.0,
+   "front": false
+  }
+ ]
+}

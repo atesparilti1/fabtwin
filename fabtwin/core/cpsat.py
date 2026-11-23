@@ -43,7 +43,7 @@ class CPResult:
 
 
 def solve_cpsat(si: StaticInstance, time_limit_s: float = 30.0, workers: int = 8,
-                flow_cap: int | None = None, objective: str = "wt",
+                flow_cap: int | None = None, objective: str = "wt", wt_cap: int | None = None,
                 hint: Schedule | None = None, seed: int = 0) -> CPResult:
     """Solve to optimality or until the time limit.
 
@@ -137,6 +137,8 @@ def solve_cpsat(si: StaticInstance, time_limit_s: float = 30.0, workers: int = 8
     flow = sum(flow_terms)
     if flow_cap is not None:
         md.Add(flow <= flow_cap)
+    if wt_cap is not None:
+        md.Add(sum(w * t for t, w in T) <= wt_cap)
     if objective == "wt":
         md.Minimize(sum(w * t for t, w in T))
     elif objective == "flow":

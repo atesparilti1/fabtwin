@@ -91,11 +91,17 @@ def pareto(n: int, k: int, seed: int, cp_s: float, points: int) -> dict[str, Any
     w_min = solve_cpsat(si, time_limit_s=cp_s, workers=8)
     assert f_min.schedule and w_min.schedule
     lo, hi = int(f_min.objective or 0), int(total_flow(si, w_min.schedule))
-    front = []
+    front = [{"flow_h": total_flow(si, s) * si.unit_h / len(si.jobs), "wt": weighted_tardiness(si, s),
+              "status": st, "cap": None}
+             for s, st in ((f_min.schedule, f"min-flow {f_min.status}"),
+                           (w_min.schedule, f"min-WT {w_min.status}"))]
     for i in range(points):
         cap = int(round(lo + (hi - lo) * i / max(1, points - 1)))
         r = solve_cpsat(si, time_limit_s=cp_s, flow_cap=cap, workers=8)
-        if r.schedule:
+        if r.schedule:  # lexicographic second stage: least flow at that tardiness
+            r2 = solve_cpsat(si, time_limit_s=cp_s, objective="flow",
+                             wt_cap=int(round(weighted_tardiness(si, r.schedule))), workers=8)
+            r = r2 if r2.schedule else r
             front.append({"flow_h": total_flow(si, r.schedule) * si.unit_h / len(si.jobs),
                           "wt": weighted_tardiness(si, r.schedule), "status": r.status, "cap": cap})
     rules = []
@@ -107,7 +113,21 @@ def pareto(n: int, k: int, seed: int, cp_s: float, points: int) -> dict[str, Any
     rules.append({"method": "ALNS", "flow_h": total_flow(si, a.best_schedule) * si.unit_h / len(si.jobs),
                   "wt": weighted_tardiness(si, a.best_schedule),
                   "qviol": qtime_violations(si, a.best_schedule)})
-    return {"instance": si.name, "front": front, "methods": rules}
+    uniq = {(round(p["flow_h"], 4), p["wt"]): p for p in front}
+    pts = sorted(uniq.values(), key=lambda p: (p["flow_h"], p["wt"]))
+    nd = [p for p in pts if not any(q["flow_h"] <= p["flow_h"] and q["wt"] <= p["wt"]
+                                    and (q["flow_h"], q["wt"]) != (p["flow_h"], p["wt"]) for q in pts)]
+    return {"instance": si.name, "front": nd, "methods": rules}
+
+
+def _web_pareto(web: Path, par: dict[str, Any]) -> None:
+    pts = [{"method": "CP-SAT ε-constraint", "x": p["flow_h"], "y": p["wt"], "front": True}
+           for p in par["front"]]
+    pts += [{"method": m["method"], "x": m["flow_h"], "y": m["wt"], "front": False}
+            for m in par["methods"]]
+    (web / "pareto.json").write_text(json.dumps({
+        "instance": par["instance"], "x": "Mean flow time (h/lot)", "y": "Weighted tardiness (units)",
+        "points": pts}, indent=1))
 
 
 def main() -> None:
@@ -115,6 +135,7 @@ def main() -> None:
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--out", default="results/exact")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--only-pareto", action="store_true", help="recompute the Pareto front only")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -130,8 +151,14 @@ def main() -> None:
         small_cfg = [(n, k, s, 60.0, 90.0, 15.0)
                      for n, k in ((5, 8), (6, 8), (8, 10), (10, 10)) for s in (1, 2, 3)]
         scale_cfg = [(n, 12, s, 60.0, 30.0) for n in (10, 20, 40, 80) for s in (1, 2)]
-        pareto_cfg = (8, 10, 2, 20.0, 8)
+        pareto_cfg = (8, 10, 3, 20.0, 10)
         conv_lim = 30.0
+    if a.only_pareto:
+        par = pareto(*pareto_cfg)
+        (out / "pareto.json").write_text(json.dumps(par, indent=1))
+        _web_pareto(web, par)
+        print(par["front"])
+        return
     with ProcessPoolExecutor(a.workers) as ex:
         small = list(ex.map(small_case, small_cfg))
         scaling = list(ex.map(scaling_case, scale_cfg))
@@ -152,13 +179,7 @@ def main() -> None:
     # ---- web sections
     (web / "exact.json").write_text(json.dumps({"rows": small}, indent=1))
     (web / "scaling.json").write_text(json.dumps({"rows": scaling}, indent=1))
-    pts = [{"method": "CP-SAT ε-constraint", "x": p["flow_h"], "y": p["wt"], "front": True}
-           for p in par["front"]]
-    pts += [{"method": m["method"], "x": m["flow_h"], "y": m["wt"], "front": False}
-            for m in par["methods"]]
-    (web / "pareto.json").write_text(json.dumps({
-        "instance": par["instance"], "x": "Mean flow time (h/lot)", "y": "Weighted tardiness (units)",
-        "points": pts}, indent=1))
+    _web_pareto(web, par)
     (web / "convergence.json").write_text(json.dumps({
         "instance": si.name,
         "series": [{k: v for k, v in c.items() if k != "weights"} for c in conv]}))
