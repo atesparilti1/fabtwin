@@ -8,3 +8,4 @@ htmlcov/
 node_modules/
 dist/
 .venv/
+web/public/data/
