@@ -125,3 +125,18 @@ def test_replicate_and_compare() -> None:
     assert a.ci("throughput_per_day").n == 3
     rows = compare_table([a, b], ["mean_ct_h"], baseline="FIFO")
     assert "mean_ct_h_vs_FIFO_pct" in rows[1]
+
+
+def test_compile_expr_rules_and_safety() -> None:
+    f = D.compile_expr("slack + 2 * proc - min(weight, 3) / 0")
+    c = _c(due=60.0, rem_work_h=10.0, proc_h=2.0)
+    v = f(c, 40.0, 1.0)
+    assert v == pytest.approx((60 - 10 - 40) + 2 * 2 - min(1.0, 3) / 1)  # protected division x/0 = x
+    assert D.compile_expr("max(cr, qleft)")(c, 40.0, 1.0) == pytest.approx(50.0)
+    for bad in ("__import__('os')", "slack.real", "[1][0]", "foo + 1", "abs(slack)", "lambda: 1"):
+        with pytest.raises((ValueError, SyntaxError)):
+            D.compile_expr(bad)
+    inst = generate("tiny", seed=0)
+    k = SimConfig(rule="EXPR", rule_expr="slack", horizon_h=10 * 24, warmup_h=24)
+    from fabtwin.sim.engine import simulate
+    assert simulate(inst, k).kpis["lots_done"] > 0
