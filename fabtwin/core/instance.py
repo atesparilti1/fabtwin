@@ -49,6 +49,7 @@ class FailureModel:
     weibull_shape: float
     mttr_h: float
     repair_cv: float
+    pm_h: float = 4.0  # mean preventive-maintenance duration (lognormal, CV 0.2)
 
     @property
     def weibull_scale(self) -> float:

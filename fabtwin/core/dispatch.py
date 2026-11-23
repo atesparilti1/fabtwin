@@ -14,6 +14,8 @@ ODD    operation due date: release + FF * (raw work up to and including this
 CR     critical ratio (d - t) / remaining work; < 1 means behind schedule.
 ATC    apparent tardiness cost (Vepsalainen & Morton, 1987):
        I = (w / p) * exp(-max(0, d - p_rem - t) / (k * p_bar)); score = -I.
+ATCS   ATC with a setup term, applied machine-first on setup tools (litho,
+       implant) so the reticle already loaded counts.
 """
 
 from __future__ import annotations
@@ -72,6 +74,22 @@ def atc(c: Candidate, now: float, pbar: float) -> float:
     return -(c.weight / c.proc_h) * math.exp(-slack / (ATC_K * max(pbar, 1e-9)))
 
 
+ATCS_K2 = 0.5
+
+
+def atcs(c: Candidate, now: float, pbar: float, setup_h: float, sbar: float) -> float:
+    """ATC with setups (Lee, Bhaskaran & Pinedo, 1997); score = -index.
+
+    I = (w / p) exp(-max(0, d - p_rem - t) / (k1 p_bar)) exp(-s / (k2 s_bar)).
+    Used machine-first, since the setup depends on the machine's last recipe.
+    """
+    slack = max(0.0, c.due - c.rem_work_h - now)
+    idx = (c.weight / c.proc_h) * math.exp(-slack / (ATC_K * max(pbar, 1e-9)))
+    if sbar > 0:
+        idx *= math.exp(-setup_h / (ATCS_K2 * sbar))
+    return -idx
+
+
 RULES: dict[str, ScoreFn] = {
     "FIFO": fifo,
     "SPT": spt,
@@ -79,7 +97,10 @@ RULES: dict[str, ScoreFn] = {
     "ODD": odd,
     "CR": critical_ratio,
     "ATC": atc,
+    "ATCS": atc,  # lot-first fallback; setup-aware (machine-first) on setup tools
 }
+
+SETUP_RULES = frozenset({"ATCS"})
 
 
 def rank_key(rule: ScoreFn, now: float, pbar: float) -> Callable[[Candidate], tuple[int, float, float, int]]:

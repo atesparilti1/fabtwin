@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any
 
-from fabtwin.core.dispatch import RULES, Candidate, rank_key
+from fabtwin.core.dispatch import RULES, SETUP_RULES, Candidate, atcs, rank_key
 from fabtwin.core.instance import Instance
 
 
@@ -49,6 +49,26 @@ class Ev(IntEnum):
     WAKE = 7
     QEXPIRE = 8
     SAMPLE = 9
+    OHT_EPOCH = 10
+    OHT_PICK = 11
+    OHT_DONE = 12
+    PM_DUE = 13
+    PM_END = 14
+    TRACE_START = 15
+    TRACE_END = 16
+    PLAN = 17
+
+
+class Loc(IntEnum):
+    """Where a lot is (for the browser replay)."""
+
+    QUEUE = 0  # waiting at a bay stocker; id = group
+    MACHINE = 1  # on a tool; id = machine
+    VEHICLE = 2  # on an OHT vehicle; id = vehicle
+    DONE = 3
+    SCRAP = 4
+    PORT = 5  # waiting at a load port / stocker for pickup; id = rail node
+    TRANSIT = 6  # fixed-delay transport (no OHT); id = destination group
 
 
 @dataclass(frozen=True)
@@ -68,6 +88,12 @@ class SimConfig:
     sample_every_h: float = 24.0
     record_ops: bool = False
     record_events: bool = False
+    transport: str = "fixed"  # "fixed" delay or "oht" vehicles
+    oht: Any = None  # OHTConfig; default config when transport == "oht"
+    pm_interval_h: tuple[float | None, ...] | None = None  # age-based PM per group
+    trace_from_h: float | None = None  # record a replay trace from this time
+    trace_to_h: float | None = None
+    plan_every_h: float = 0.0  # >0: call ``planner`` periodically (rolling horizon)
 
 
 @dataclass
@@ -91,7 +117,7 @@ class Lot:
     __slots__ = (
         "id", "product", "step", "release", "due", "weight", "hot", "q_arrival",
         "q_deadline", "q_origin", "q_token", "in_transit", "expired", "done", "rng",
-        "reworks", "qviol", "scrapped",
+        "reworks", "qviol", "scrapped", "node", "loc", "q_open",
     )
 
     def __init__(self, lid: int, product: int, release: float, due: float,
@@ -114,13 +140,16 @@ class Lot:
         self.reworks = 0
         self.qviol = 0
         self.scrapped: float | None = None
+        self.node = -1
+        self.loc: tuple[int, int] = (int(Loc.QUEUE), -1)
+        self.q_open = 0.0
 
 
 class Mach:
     __slots__ = (
         "id", "group", "speed", "state", "since", "last_recipe", "batch", "token",
         "phase_end", "pending_proc", "resume_phase", "remaining", "acc", "rng_fail",
-        "rng_batch", "ops",
+        "rng_batch", "ops", "fail_token", "pm_token", "pm_pending", "rng_pm", "n_pm",
     )
 
     def __init__(self, mid: int, group: int, speed: float, seed: int) -> None:
@@ -140,6 +169,11 @@ class Mach:
         self.rng_fail = stream(seed, "fail", mid)
         self.rng_batch = stream(seed, "batch", mid)
         self.ops: list[OpRecord] = []
+        self.fail_token = 0
+        self.pm_token = 0
+        self.pm_pending = False
+        self.rng_pm = stream(seed, "pm", mid)
+        self.n_pm = 0
 
 
 def stream(seed: int, source: str, idx: int) -> random.Random:
@@ -165,12 +199,13 @@ class SimResult:
     ops: list[OpRecord] = field(default_factory=list)
     events: list[tuple[float, str, int, int, float]] = field(default_factory=list)
     lots: list[dict[str, Any]] = field(default_factory=list)
+    trace: dict[str, Any] = field(default_factory=dict)
 
 
 class Simulator:
     """Event-driven fab simulator. Use :func:`simulate` for one-shot runs."""
 
-    def __init__(self, inst: Instance, cfg: SimConfig) -> None:
+    def __init__(self, inst: Instance, cfg: SimConfig, planner: Any = None) -> None:
         if cfg.rule not in RULES:
             raise ValueError(f"unknown rule {cfg.rule!r}; choose from {sorted(RULES)}")
         self.inst = inst
@@ -209,6 +244,32 @@ class Simulator:
         self.wrr = [0.0] * len(inst.products)
         self.rng_hot = stream(cfg.seed, "hot", 0)
         self.rng_rel = stream(cfg.seed, "release", 0)
+        # layout / transport / planning / tracing
+        self.planner = planner
+        self.plan_rank: dict[int, float] = {}  # lot id -> planned position (lower first)
+        self.tracing = False
+        self.layout: Any = None
+        self.oht: Any = None
+        self.stocker: list[int] = []
+        self.port: list[int] = []
+        if cfg.transport not in ("fixed", "oht"):
+            raise ValueError(f"unknown transport {cfg.transport!r}")
+        if cfg.transport == "oht" or cfg.trace_from_h is not None:
+            from fabtwin.core.layout import build_layout
+
+            self.layout = build_layout(inst)
+            self.stocker = [b.stocker for b in self.layout.bays]
+            self.port = [t.port for t in self.layout.tools]
+        if cfg.transport == "oht":
+            from fabtwin.sim.oht import OHT, OHTConfig
+
+            self.oht = OHT(self, self.layout, cfg.oht or OHTConfig())
+        if cfg.pm_interval_h is not None and len(cfg.pm_interval_h) != len(inst.groups):
+            raise ValueError("pm_interval_h needs one entry per tool group")
+        self.tr_m: list[tuple[float, int, int]] = []
+        self.tr_lot: list[tuple[float, int, int, int]] = []
+        self.tr_q: list[list[float]] = []  # [lot, open, deadline, close_t, violated]
+        self.tr_qidx: dict[int, int] = {}
 
     # ------------------------------------------------------------- event queue
     def _push(self, t: float, kind: Ev, a: int = 0, b: int = 0) -> None:
@@ -230,6 +291,13 @@ class Simulator:
         m.acc[m.state] += self._overlap(m.since, self.now)
         m.since = self.now
         m.state = s
+        if self.tracing:
+            self.tr_m.append((self.now, m.id, int(s)))
+
+    def _move(self, lot: Lot, kind: Loc, ident: int) -> None:
+        lot.loc = (int(kind), ident)
+        if self.tracing:
+            self.tr_lot.append((self.now, lot.id, int(kind), ident))
 
     def _wip_change(self, delta: int) -> None:
         self.wip_area_win += self.wip * self._overlap(self.wip_last_t, self.now)
@@ -248,13 +316,30 @@ class Simulator:
                 f = inst.groups[m.group].failure
                 if f is not None:
                     self._push(m.rng_fail.weibullvariate(f.weibull_scale, f.weibull_shape),
-                               Ev.FAIL, m.id)
+                               Ev.FAIL, m.id, m.fail_token)
+        if cfg.pm_interval_h is not None:
+            for m in self.machines:
+                tau = cfg.pm_interval_h[m.group]
+                if tau is not None:
+                    # stagger first PMs across the group so tools do not all stop together
+                    k = inst.groups[m.group].machines.index(m.id)
+                    n = len(inst.groups[m.group].machines)
+                    self._push(tau * (k + 1) / n, Ev.PM_DUE, m.id, m.pm_token)
+        if cfg.trace_from_h is not None:
+            self._push(cfg.trace_from_h, Ev.TRACE_START)
+            self._push(cfg.trace_to_h if cfg.trace_to_h is not None else self.T, Ev.TRACE_END)
+        if self.planner is not None and cfg.plan_every_h > 0:
+            self._push(0.0, Ev.PLAN)
         self._push(0.0, Ev.SAMPLE)
         handlers = {
             Ev.RELEASE: self._on_release, Ev.HOT: self._on_hot, Ev.ARRIVE: self._on_arrive,
             Ev.SETUP_END: self._on_setup_end, Ev.END: self._on_end, Ev.FAIL: self._on_fail,
             Ev.REPAIR: self._on_repair, Ev.WAKE: self._on_wake, Ev.QEXPIRE: self._on_qexpire,
-            Ev.SAMPLE: self._on_sample,
+            Ev.SAMPLE: self._on_sample, Ev.OHT_EPOCH: self._on_oht_epoch,
+            Ev.OHT_PICK: self._on_oht_pick, Ev.OHT_DONE: self._on_oht_done,
+            Ev.PM_DUE: self._on_pm_due, Ev.PM_END: self._on_pm_end,
+            Ev.TRACE_START: self._on_trace_start, Ev.TRACE_END: self._on_trace_end,
+            Ev.PLAN: self._on_plan,
         }
         while self.heap:
             t, _, kind, a, b = heapq.heappop(self.heap)
@@ -276,6 +361,8 @@ class Simulator:
         lot = Lot(lid, product, self.now, self.now + ff * self.raw[product],
                   inst.hot_weight if hot else 1.0, hot, stream(self.cfg.seed, "lot", lid))
         self.lots.append(lot)
+        if self.stocker:
+            lot.node = self.stocker[inst.products[product].route[0].group]
         self._wip_change(+1)
         self._log("release", lid, -1, 1.0 if hot else 0.0)
         self._push(self.now, Ev.ARRIVE, lid)
@@ -316,13 +403,39 @@ class Simulator:
         lot.q_arrival = self.now
         g = self.inst.products[lot.product].route[lot.step].group
         self.queues[g].append(lot)
+        if self.stocker:
+            lot.node = self.stocker[g]
+        self._move(lot, Loc.QUEUE, g)
         self._log("arrive", lid, g, float(lot.step))
         self._dispatch(g)
 
     def _send(self, lot: Lot, step: int) -> None:
         lot.step = step
         lot.in_transit = True
-        self._push(self.now + self.inst.transport_h, Ev.ARRIVE, lot.id)
+        g = self.inst.products[lot.product].route[step].group
+        if self.oht is None:
+            self._move(lot, Loc.TRANSIT, g)
+            self._push(self.now + self.inst.transport_h, Ev.ARRIVE, lot.id)
+            return
+        dst = self.stocker[g]
+        if lot.node == dst:
+            self._push(self.now, Ev.ARRIVE, lot.id)
+            return
+        self._move(lot, Loc.PORT, lot.node)
+        self.oht.request(lot.id, lot.node, dst, lot.hot, lot.q_deadline is not None)
+
+    # ------------------------------------------------------------------- OHT
+    def _on_oht_epoch(self, a: int, b: int) -> None:
+        self.oht.on_epoch()
+
+    def _on_oht_pick(self, lid: int, vid: int) -> None:
+        lot = self.lots[lid]
+        if lot.scrapped is None:
+            self._move(lot, Loc.VEHICLE, vid)
+
+    def _on_oht_done(self, lid: int, vid: int) -> None:
+        self.oht.on_done(lid, vid)
+        self._on_arrive(lid, 0)
 
     def _complete(self, lot: Lot) -> None:
         prod = self.inst.products[lot.product]
@@ -337,13 +450,18 @@ class Simulator:
                 self._log("rework", lot.id, -1, float(nxt))
         if nxt == len(prod.route):
             lot.done = self.now
+            self._move(lot, Loc.DONE, -1)
             self._wip_change(-1)
             self._log("done", lot.id)
             return
         if s.qtime_max_h is not None and nxt == k + 1:
             lot.q_deadline = self.now + s.qtime_max_h
             lot.q_origin = k
+            lot.q_open = self.now
             lot.q_token += 1
+            if self.tracing:
+                self.tr_qidx[lot.id] = len(self.tr_q)
+                self.tr_q.append([lot.id, self.now, lot.q_deadline, math.nan, 0])
             if self._in_win(self.now):
                 self.q_opened_win += 1
             self._push(lot.q_deadline, Ev.QEXPIRE, lot.id, lot.q_token)
@@ -359,6 +477,7 @@ class Simulator:
         if self._in_win(self.now):
             self.q_viol_win += 1
         self._log("qviol", lid, -1, float(lot.q_origin))
+        self._close_q(lot, violated=True)
         if lot.qviol > self.cfg.qtime_max_reworks:
             self._scrap(lot)
             return
@@ -375,11 +494,20 @@ class Simulator:
         if lot.in_transit:
             lot.expired = False
             lot.q_token += 1
+            if self.oht is not None:
+                self.oht.cancel(lot.id)
         else:
             g = self.inst.products[lot.product].route[lot.step].group
             self.queues[g].remove(lot)
         self._wip_change(-1)
+        self._move(lot, Loc.SCRAP, -1)
         self._log("scrap", lot.id)
+
+    def _close_q(self, lot: Lot, violated: bool) -> None:
+        i = self.tr_qidx.pop(lot.id, None)
+        if i is not None:
+            self.tr_q[i][3] = self.now
+            self.tr_q[i][4] = 1 if violated else 0
 
     # --------------------------------------------------------------- dispatch
     def _candidate(self, lot: Lot) -> Candidate:
@@ -399,7 +527,7 @@ class Simulator:
             return
         group = self.inst.groups[g]
         idle = [self.machines[m] for m in group.machines
-                if self.machines[m].state == MState.IDLE]
+                if self.machines[m].state == MState.IDLE and not self.machines[m].pm_pending]
         if not idle:
             return
         idle.sort(key=lambda m: (-m.speed, m.id))
@@ -409,6 +537,16 @@ class Simulator:
         if group.is_batch:
             self._dispatch_batch(g, idle, cands, key)
             return
+        if self.cfg.rule in SETUP_RULES and group.setup_h > 0:
+            self._dispatch_setup_aware(g, idle, cands, pbar)
+            return
+        if self.plan_rank and group.kind == "litho":
+            base_key = key
+            pr = self.plan_rank
+
+            def key(c: Candidate) -> Any:  # planned lots first, in plan order
+                return (pr.get(c.lot_id, math.inf), base_key(c))
+
         cands.sort(key=key)
         by_id = {lot.id: lot for lot in queue}
         for c in cands:
@@ -425,6 +563,32 @@ class Simulator:
             idle.remove(m)
             queue.remove(lot)
             self._start(m, [lot], step.recipe)
+
+    def _dispatch_setup_aware(self, g: int, idle: list[Mach], cands: list[Candidate],
+                              pbar: float) -> None:
+        """Machine-first dispatch with a setup-dependent index (ATCS)."""
+        group = self.inst.groups[g]
+        queue = self.queues[g]
+        by_id = {lot.id: lot for lot in queue}
+        pr = self.plan_rank if group.kind == "litho" else {}
+        for m in idle:
+            best: tuple[Any, ...] | None = None
+            best_c: Candidate | None = None
+            for c in cands:
+                lot = by_id.get(c.lot_id)
+                if lot is None or m.id not in self.elig[lot.product][lot.step]:
+                    continue
+                recipe = self.inst.products[lot.product].route[lot.step].recipe
+                setup = group.setup_h if (m.last_recipe is not None and m.last_recipe != recipe) else 0.0
+                k = (0 if c.hot else 1, pr.get(c.lot_id, math.inf),
+                     atcs(c, self.now, pbar, setup, group.setup_h), c.q_arrival, c.lot_id)
+                if best is None or k < best:
+                    best, best_c = k, c
+            if best_c is None:
+                continue
+            lot = by_id.pop(best_c.lot_id)
+            queue.remove(lot)
+            self._start(m, [lot], self.inst.products[lot.product].route[lot.step].recipe)
 
     def _dispatch_batch(self, g: int, idle: list[Mach], cands: list[Candidate],
                         key: Any) -> None:
@@ -489,6 +653,11 @@ class Simulator:
             if lot.q_deadline is not None:  # Q-time met: close the window
                 lot.q_deadline = None
                 lot.q_token += 1
+                self._close_q(lot, violated=False)
+            if self.port:
+                lot.node = self.port[m.id]
+            self._move(lot, Loc.MACHINE, m.id)
+            self.plan_rank.pop(lot.id, None)
         setup = group.setup_h if (m.last_recipe is not None and m.last_recipe != recipe) else 0.0
         m.last_recipe = recipe
         steps = [self.inst.products[lot.product].route[lot.step] for lot in lots]
@@ -542,12 +711,17 @@ class Simulator:
         self._log("end", lots[0].id, m.id, float(len(lots)))
         for lot in lots:
             self._complete(lot)
+        if m.pm_pending:
+            self._start_pm(m)
+            return
         self._dispatch(m.group)
 
-    def _on_fail(self, mid: int, b: int) -> None:
+    def _on_fail(self, mid: int, token: int) -> None:
         m = self.machines[mid]
         f = self.inst.groups[m.group].failure
         assert f is not None
+        if token != m.fail_token or m.state in (MState.PM, MState.DOWN):
+            return
         if m.state in (MState.SETUP, MState.BUSY):
             m.resume_phase = m.state
             m.remaining = m.phase_end - self.now
@@ -577,8 +751,74 @@ class Simulator:
         else:
             self._set_state(m, MState.IDLE)
             self._dispatch(m.group)
-        self._push(self.now + m.rng_fail.weibullvariate(f.weibull_scale, f.weibull_shape),
-                   Ev.FAIL, mid)
+        self._renew(m)
+
+    # ------------------------------------------------------------ maintenance
+    def _renew(self, m: Mach) -> None:
+        """Machine as good as new (after repair or PM): restart failure and PM clocks."""
+        f = self.inst.groups[m.group].failure
+        m.fail_token += 1
+        if f is not None and self.cfg.failures:
+            self._push(self.now + m.rng_fail.weibullvariate(f.weibull_scale, f.weibull_shape),
+                       Ev.FAIL, m.id, m.fail_token)
+        m.pm_token += 1
+        m.pm_pending = False
+        if self.cfg.pm_interval_h is not None:
+            tau = self.cfg.pm_interval_h[m.group]
+            if tau is not None:
+                self._push(self.now + tau, Ev.PM_DUE, m.id, m.pm_token)
+
+    def _on_pm_due(self, mid: int, token: int) -> None:
+        m = self.machines[mid]
+        if token != m.pm_token or m.state == MState.DOWN:
+            return
+        if m.state == MState.IDLE:
+            self._start_pm(m)
+        else:
+            m.pm_pending = True  # finish the current job first
+
+    def _start_pm(self, m: Mach) -> None:
+        f = self.inst.groups[m.group].failure
+        assert f is not None
+        m.pm_pending = False
+        m.fail_token += 1  # no failures during PM
+        self._set_state(m, MState.PM)
+        if self._in_win(self.now):
+            m.n_pm += 1
+        self._log("pm", -1, m.id)
+        dur = f.pm_h * lognormal_factor(m.rng_pm, 0.2)
+        self._push(self.now + dur, Ev.PM_END, m.id)
+
+    def _on_pm_end(self, mid: int, b: int) -> None:
+        m = self.machines[mid]
+        self._set_state(m, MState.IDLE)
+        self._log("pm_end", -1, mid)
+        self._renew(m)
+        self._dispatch(m.group)
+
+    # ----------------------------------------------------------- planning hook
+    def _on_plan(self, a: int, b: int) -> None:
+        self.plan_rank = self.planner(self)
+        for g in self.inst.groups:
+            if g.kind == "litho":
+                self._dispatch(g.id)
+        self._push(self.now + self.cfg.plan_every_h, Ev.PLAN)
+
+    # ---------------------------------------------------------------- tracing
+    def _on_trace_start(self, a: int, b: int) -> None:
+        self.tracing = True
+        self.trace_t0 = self.now
+        self.tr_m = [(self.now, m.id, int(m.state)) for m in self.machines]
+        self.tr_lot = [(self.now, lot.id, lot.loc[0], lot.loc[1]) for lot in self.lots
+                       if lot.done is None and lot.scrapped is None]
+        for lot in self.lots:
+            if lot.q_deadline is not None and lot.done is None and lot.scrapped is None:
+                self.tr_qidx[lot.id] = len(self.tr_q)
+                self.tr_q.append([lot.id, lot.q_open, lot.q_deadline, math.nan, 0])
+
+    def _on_trace_end(self, a: int, b: int) -> None:
+        self.tracing = False
+        self.trace_t1 = self.now
 
     def _on_sample(self, a: int, b: int) -> None:
         self.wip_series.append((self.now, self.wip))
@@ -639,6 +879,13 @@ class Simulator:
         kpis["furnace_batch_fill"] = (self.batch_lots_win / (self.batch_starts_win * self.batch_cap)
                                       if self.batch_starts_win else math.nan)
         kpis["max_util"] = max(f["busy"] + f["setup"] for f in group_util.values())
+        n_m = len(self.machines)
+        kpis["down_frac"] = sum(m.acc[MState.DOWN] for m in self.machines) / (span * n_m)
+        kpis["pm_frac"] = sum(m.acc[MState.PM] for m in self.machines) / (span * n_m)
+        kpis["litho_down_frac"] = max((f["down"] for f in litho), default=math.nan)
+        kpis["pm_count"] = float(sum(m.n_pm for m in self.machines))
+        if self.oht is not None:
+            kpis.update(self.oht.kpis(span))
         lots_out = [
             {"id": lot.id, "product": lot.product, "hot": lot.hot, "release": lot.release,
              "due": lot.due, "done": lot.done, "scrapped": lot.scrapped,
@@ -646,12 +893,25 @@ class Simulator:
             for lot in self.lots
         ]
         ops = [op for m in self.machines for op in m.ops]
-        return SimResult(kpis, group_util, self.wip_series, ops, self.events, lots_out)
+        trace: dict[str, Any] = {}
+        if self.cfg.trace_from_h is not None:
+            t0 = getattr(self, "trace_t0", self.cfg.trace_from_h)
+            t1 = getattr(self, "trace_t1", self.T)
+            trace = {
+                "t0": t0, "t1": t1, "mstate": self.tr_m, "lotloc": self.tr_lot,
+                "qtime": self.tr_q,
+                "vehicles": ([list(v.legs) for v in self.oht.vehicles]
+                             if self.oht is not None else []),
+            }
+        return SimResult(kpis, group_util, self.wip_series, ops, self.events, lots_out, trace)
 
 
-def simulate(inst: Instance, cfg: SimConfig | None = None, **overrides: Any) -> SimResult:
+def simulate(inst: Instance, cfg: SimConfig | None = None, planner: Any = None,
+             **overrides: Any) -> SimResult:
     """Run one replication. ``overrides`` are applied on top of ``cfg``."""
     base = cfg or SimConfig()
     if overrides:
         base = SimConfig(**{**base.__dict__, **overrides})
-    return Simulator(inst, base).run()
+    if base.trace_from_h is not None and not base.record_ops:
+        base = SimConfig(**{**base.__dict__, "record_ops": True})
+    return Simulator(inst, base, planner).run()

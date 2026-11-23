@@ -57,16 +57,17 @@ PROC_CV: dict[ToolKind, float] = {
     ToolKind.METRO: 0.15,
 }
 SETUP_H: dict[ToolKind, float] = {ToolKind.LITHO: 0.20, ToolKind.IMPLANT: 0.25}
-# (MTBF h, Weibull shape, MTTR h, repair CV). Shape > 1: wear-out, so PM helps.
-FAILURES: dict[ToolKind, tuple[float, float, float, float]] = {
-    ToolKind.LITHO: (200.0, 1.6, 10.0, 0.8),
-    ToolKind.ETCH: (110.0, 1.4, 4.0, 0.8),
-    ToolKind.DEP: (150.0, 1.4, 4.0, 0.8),
-    ToolKind.FURNACE: (300.0, 1.5, 8.0, 0.6),
-    ToolKind.IMPLANT: (130.0, 1.4, 5.0, 0.8),
-    ToolKind.CMP: (120.0, 1.3, 3.0, 0.8),
-    ToolKind.CLEAN: (200.0, 1.3, 2.0, 0.6),
-    ToolKind.METRO: (250.0, 1.2, 2.0, 0.6),
+# (MTBF h, Weibull shape, MTTR h, repair CV, PM duration h). Shape > 1 means
+# wear-out, so preventive maintenance can pay off; PM is shorter than a repair.
+FAILURES: dict[ToolKind, tuple[float, float, float, float, float]] = {
+    ToolKind.LITHO: (200.0, 2.2, 10.0, 0.8, 3.0),
+    ToolKind.ETCH: (110.0, 1.8, 4.0, 0.8, 1.5),
+    ToolKind.DEP: (150.0, 1.6, 4.0, 0.8, 1.5),
+    ToolKind.FURNACE: (300.0, 1.5, 8.0, 0.6, 3.0),
+    ToolKind.IMPLANT: (130.0, 1.6, 5.0, 0.8, 2.0),
+    ToolKind.CMP: (120.0, 1.4, 3.0, 0.8, 1.2),
+    ToolKind.CLEAN: (200.0, 1.3, 2.0, 0.6, 1.0),
+    ToolKind.METRO: (250.0, 1.2, 2.0, 0.6, 1.0),
 }
 
 
@@ -217,7 +218,7 @@ def generate(cfg: GeneratorConfig | str = "medium", seed: int = 0) -> Instance:
     def avail(kind: ToolKind) -> float:
         if not cfg.failures:
             return 1.0
-        mtbf, _, mttr, _ = FAILURES[kind]
+        mtbf, _, mttr, _, _ = FAILURES[kind]
         return mtbf / (mtbf + mttr)
 
     litho_groups = [i for i, (k, _) in enumerate(kinds) if k is ToolKind.LITHO]
