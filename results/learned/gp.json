@@ -1,0 +1,96 @@
+{
+ "expr": "(min(((slack + slack) + (proc / rem)), (max(slack, slack) * (proc * (0.82)))) / (((weight / cr) * cr) + (min(weight, slack) / slack)))",
+ "train_history": [
+  {
+   "gen": 0,
+   "best": 0.5036023600999677,
+   "median": 2.420147999332975,
+   "best_expr": "(min(((slack + cr) + (proc / rem)), (max(slack, slack) * (proc * (0.82)))) / (((weight / cr) * cr) + (min(wait, wait) / (cr + slack))))"
+  },
+  {
+   "gen": 1,
+   "best": 0.4961984793442328,
+   "median": 1.1462605971619382,
+   "best_expr": "max(slack, (-1.35))"
+  },
+  {
+   "gen": 2,
+   "best": 0.4961984793442328,
+   "median": 0.7467012698061376,
+   "best_expr": "max(slack, (-1.35))"
+  },
+  {
+   "gen": 3,
+   "best": 0.19586206193444625,
+   "median": 0.6042088989204994,
+   "best_expr": "(min(((slack + slack) + (proc / rem)), (max(slack, slack) * (proc * (0.82)))) / (((weight / cr) * cr) + (min(weight, slack) / (cr + slack))))"
+  },
+  {
+   "gen": 4,
+   "best": 0.19586206193444625,
+   "median": 0.6022088989204994,
+   "best_expr": "(min(((slack + slack) + (proc / rem)), (max(slack, slack) * (proc * (0.82)))) / (((weight / cr) * cr) + (min(weight, slack) / (cr + slack))))"
+  },
+  {
+   "gen": 5,
+   "best": 0.19586206193444625,
+   "median": 0.6042088989204994,
+   "best_expr": "(min(((slack + slack) + (proc / rem)), (max(slack, slack) * (proc * (0.82)))) / (((weight / cr) * cr) + (min(weight, slack) / (cr + slack))))"
+  },
+  {
+   "gen": 6,
+   "best": 0.19586206193444625,
+   "median": 0.5823581005666046,
+   "best_expr": "(min(((slack + slack) + (proc / rem)), (max(slack, slack) * (proc * (0.82)))) / (((weight / cr) * cr) + (min(weight, slack) / (cr + slack))))"
+  },
+  {
+   "gen": 7,
+   "best": 0.19586206193444625,
+   "median": 0.4443647286091356,
+   "best_expr": "(min(((slack + slack) + (proc / rem)), (max(slack, slack) * (proc * (0.82)))) / (((weight / cr) * cr) + (min(weight, slack) / (cr + slack))))"
+  },
+  {
+   "gen": 8,
+   "best": 0.1802808523301081,
+   "median": 0.3577921435674549,
+   "best_expr": "(min(((slack + slack) + (weight / cr)), (max(slack, (proc / rem)) * (proc * (0.82)))) / (((weight / cr) * cr) + (min(weight, slack) / (cr + slack))))"
+  },
+  {
+   "gen": 9,
+   "best": 0.12855267914443386,
+   "median": 0.3577921435674549,
+   "best_expr": "(min(((slack + slack) + (proc / rem)), (max(slack, slack) * (proc * (0.82)))) / (((weight / cr) * cr) + (min(weight, slack) / slack)))"
+  }
+ ],
+ "test_reps": 200,
+ "gp": {
+  "mean": 1.4620678195002577,
+  "hw": 0.4790030870786809
+ },
+ "vs_ATC_pct": {
+  "mean": -22.47497479352778,
+  "hw": 7.5762146766988865
+ },
+ "ATC": {
+  "mean": 1.885930143984263,
+  "hw": 0.47919403516096337
+ },
+ "vs_ATCS_pct": {
+  "mean": 344.50155416555447,
+  "hw": 120.23840755266313
+ },
+ "ATCS": {
+  "mean": 0.32892299381156065,
+  "hw": 0.09647230620958656
+ },
+ "vs_CR_pct": {
+  "mean": -46.74388762298891,
+  "hw": 10.157353358254012
+ },
+ "CR": {
+  "mean": 2.745352137516114,
+  "hw": 0.6722784068753728
+ },
+ "beats_best_baseline": false,
+ "best_baseline": "ATCS"
+}
