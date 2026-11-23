@@ -1,0 +1,363 @@
+{
+ "replications": 200,
+ "vehicles": 4,
+ "pm_interval_h": [
+  101.36,
+  101.36,
+  79.77,
+  79.77,
+  79.77,
+  133.35,
+  133.35,
+  313.79,
+  313.79,
+  313.79,
+  125.33,
+  177.93,
+  null,
+  null,
+  null,
+  null
+ ],
+ "kpis": [
+  {
+   "key": "mean_weighted_tardiness_h",
+   "label": "Weighted tardiness (h/lot)",
+   "better": "lower"
+  },
+  {
+   "key": "mean_ct_days",
+   "label": "Cycle time (days)",
+   "better": "lower"
+  },
+  {
+   "key": "on_time_pct",
+   "label": "On-time (%)",
+   "better": "higher"
+  },
+  {
+   "key": "throughput_per_day",
+   "label": "Throughput (lots/day)",
+   "better": "higher"
+  },
+  {
+   "key": "qtime_viol_pct",
+   "label": "Q-time violations (%)",
+   "better": "lower"
+  },
+  {
+   "key": "hot_mean_ct_h",
+   "label": "Hot-lot cycle time (h)",
+   "better": "lower"
+  },
+  {
+   "key": "down_frac",
+   "label": "Unplanned down (frac)",
+   "better": "lower"
+  },
+  {
+   "key": "oht_mean_wait_min",
+   "label": "Wait for vehicle (min)",
+   "better": "lower"
+  }
+ ],
+ "rows": [
+  {
+   "policy": "FIFO baseline",
+   "values": {
+    "mean_weighted_tardiness_h": {
+     "mean": 4.626716899156612,
+     "hw": 1.104848649186378
+    },
+    "mean_ct_days": {
+     "mean": 4.25383558867394,
+     "hw": 0.08379160388830931
+    },
+    "on_time_pct": {
+     "mean": 79.85258413645944,
+     "hw": 2.7162739193256535
+    },
+    "throughput_per_day": {
+     "mean": 20.5375,
+     "hw": 0.06779148406144543
+    },
+    "qtime_viol_pct": {
+     "mean": 0.9201528996780755,
+     "hw": 0.019232104594216422
+    },
+    "hot_mean_ct_h": {
+     "mean": 67.28489388721783,
+     "hw": 0.1301494174868161
+    },
+    "down_frac": {
+     "mean": 0.026217969232857515,
+     "hw": 0.00016274134530341782
+    },
+    "oht_mean_wait_min": {
+     "mean": 1.0557868671116484,
+     "hw": 0.003258417929932827
+    }
+   }
+  },
+  {
+   "policy": "CR baseline",
+   "values": {
+    "mean_weighted_tardiness_h": {
+     "mean": 2.135582952465606,
+     "hw": 0.5840350003865911
+    },
+    "mean_ct_days": {
+     "mean": 4.293946247778614,
+     "hw": 0.06183884257363899
+    },
+    "on_time_pct": {
+     "mean": 84.86202070398289,
+     "hw": 2.650711750958302
+    },
+    "throughput_per_day": {
+     "mean": 20.517944444444442,
+     "hw": 0.061948996895415526
+    },
+    "qtime_viol_pct": {
+     "mean": 1.8480728906146657,
+     "hw": 0.03265192966024153
+    },
+    "hot_mean_ct_h": {
+     "mean": 67.43676635864144,
+     "hw": 0.12950040897944498
+    },
+    "down_frac": {
+     "mean": 0.026217969232857515,
+     "hw": 0.00016274134530341782
+    },
+    "oht_mean_wait_min": {
+     "mean": 1.0535334507925016,
+     "hw": 0.0027591188972212978
+    }
+   }
+  },
+  {
+   "policy": "ATCS + Hungarian",
+   "values": {
+    "mean_weighted_tardiness_h": {
+     "mean": 0.18497248259746718,
+     "hw": 0.07669848931534652
+    },
+    "mean_ct_days": {
+     "mean": 3.7122522257906665,
+     "hw": 0.027297781650833707
+    },
+    "on_time_pct": {
+     "mean": 98.1028036695165,
+     "hw": 0.6159765304354438
+    },
+    "throughput_per_day": {
+     "mean": 20.579444444444444,
+     "hw": 0.06891213835629396
+    },
+    "qtime_viol_pct": {
+     "mean": 1.8873947910694957,
+     "hw": 0.029786810077982784
+    },
+    "hot_mean_ct_h": {
+     "mean": 67.3666453164036,
+     "hw": 0.14050250676775608
+    },
+    "down_frac": {
+     "mean": 0.026217969232857515,
+     "hw": 0.00016274134530341782
+    },
+    "oht_mean_wait_min": {
+     "mean": 1.0153347567811166,
+     "hw": 0.0027326617965968553
+    }
+   }
+  },
+  {
+   "policy": "FabTwin",
+   "values": {
+    "mean_weighted_tardiness_h": {
+     "mean": 0.06244290943063484,
+     "hw": 0.05083803316296843
+    },
+    "mean_ct_days": {
+     "mean": 3.6023266019582083,
+     "hw": 0.022896911334228328
+    },
+    "on_time_pct": {
+     "mean": 99.25913787679855,
+     "hw": 0.39263792620186916
+    },
+    "throughput_per_day": {
+     "mean": 20.59466666666667,
+     "hw": 0.06958089870280533
+    },
+    "qtime_viol_pct": {
+     "mean": 1.8749094637151447,
+     "hw": 0.027574942091577154
+    },
+    "hot_mean_ct_h": {
+     "mean": 66.78396274380044,
+     "hw": 0.12312891415874341
+    },
+    "down_frac": {
+     "mean": 0.017815965761318834,
+     "hw": 0.00014847784077149674
+    },
+    "oht_mean_wait_min": {
+     "mean": 1.013837706636968,
+     "hw": 0.0028319249075360008
+    }
+   }
+  }
+ ],
+ "deltas": [
+  {
+   "label": "Weighted tardiness (h/lot): FabTwin vs CR baseline",
+   "kpi": "mean_weighted_tardiness_h",
+   "ref": "CR baseline",
+   "mean": -97.07607192881257,
+   "hw": 26.16776567988906,
+   "unit": "%"
+  },
+  {
+   "label": "Cycle time (days): FabTwin vs CR baseline",
+   "kpi": "mean_ct_days",
+   "ref": "CR baseline",
+   "mean": -16.10685383353833,
+   "hw": 1.047079217323206,
+   "unit": "%"
+  },
+  {
+   "label": "On-time (%): FabTwin vs CR baseline",
+   "kpi": "on_time_pct",
+   "ref": "CR baseline",
+   "mean": 16.96532448011805,
+   "hw": 2.966798611191175,
+   "unit": "%"
+  },
+  {
+   "label": "Throughput (lots/day): FabTwin vs CR baseline",
+   "kpi": "throughput_per_day",
+   "ref": "CR baseline",
+   "mean": 0.37392742937753826,
+   "hw": 0.12231214422307181,
+   "unit": "%"
+  },
+  {
+   "label": "Q-time violations (%): FabTwin vs CR baseline",
+   "kpi": "qtime_viol_pct",
+   "ref": "CR baseline",
+   "mean": 1.4521382374454515,
+   "hw": 1.8629610542960242,
+   "unit": "%"
+  },
+  {
+   "label": "Unplanned down (frac): FabTwin vs CR baseline",
+   "kpi": "down_frac",
+   "ref": "CR baseline",
+   "mean": -32.04673633154211,
+   "hw": 0.7626890258502979,
+   "unit": "%"
+  },
+  {
+   "label": "Weighted tardiness (h/lot): FabTwin vs FIFO baseline",
+   "kpi": "mean_weighted_tardiness_h",
+   "ref": "FIFO baseline",
+   "mean": -98.65038404571466,
+   "hw": 23.28134708348336,
+   "unit": "%"
+  },
+  {
+   "label": "Cycle time (days): FabTwin vs FIFO baseline",
+   "kpi": "mean_ct_days",
+   "ref": "FIFO baseline",
+   "mean": -15.315800837493788,
+   "hw": 1.568246392928249,
+   "unit": "%"
+  },
+  {
+   "label": "On-time (%): FabTwin vs FIFO baseline",
+   "kpi": "on_time_pct",
+   "ref": "FIFO baseline",
+   "mean": 24.302975226418976,
+   "hw": 3.231566932931275,
+   "unit": "%"
+  },
+  {
+   "label": "Throughput (lots/day): FabTwin vs FIFO baseline",
+   "kpi": "throughput_per_day",
+   "ref": "FIFO baseline",
+   "mean": 0.27835260701968045,
+   "hw": 0.1779250780539542,
+   "unit": "%"
+  },
+  {
+   "label": "Q-time violations (%): FabTwin vs FIFO baseline",
+   "kpi": "qtime_viol_pct",
+   "ref": "FIFO baseline",
+   "mean": 103.76064286393057,
+   "hw": 3.24269606086316,
+   "unit": "%"
+  },
+  {
+   "label": "Unplanned down (frac): FabTwin vs FIFO baseline",
+   "kpi": "down_frac",
+   "ref": "FIFO baseline",
+   "mean": -32.04673633154211,
+   "hw": 0.7626890258502979,
+   "unit": "%"
+  }
+ ],
+ "rolling_horizon": {
+  "replications": 20,
+  "values": {
+   "mean_weighted_tardiness_h": {
+    "mean": 0.24555923211894645,
+    "hw": 0.42716608997198896
+   },
+   "mean_ct_days": {
+    "mean": 3.7641463380439966,
+    "hw": 0.11124617254216633
+   },
+   "on_time_pct": {
+    "mean": 97.63061180391992,
+    "hw": 3.2493385788184046
+   },
+   "throughput_per_day": {
+    "mean": 20.754444444444445,
+    "hw": 0.24223981484539092
+   },
+   "qtime_viol_pct": {
+    "mean": 1.8286909512108633,
+    "hw": 0.09735170591516641
+   },
+   "hot_mean_ct_h": {
+    "mean": 66.81772962749857,
+    "hw": 0.33471888718488135
+   },
+   "down_frac": {
+    "mean": 0.017918354607570082,
+    "hw": 0.0003451944301733915
+   },
+   "oht_mean_wait_min": {
+    "mean": 1.02200491670526,
+    "hw": 0.01057001133586283
+   }
+  },
+  "vs_fabtwin_pct": {
+   "mean_weighted_tardiness_h": {
+    "mean": -11.736100908822104,
+    "hw": 32.16398742257248
+   },
+   "mean_ct_days": {
+    "mean": 2.5854959405920472,
+    "hw": 0.4726534047927884
+   },
+   "on_time_pct": {
+    "mean": -0.03576820846539898,
+    "hw": 0.2670688187429611
+   }
+  }
+ }
+}
