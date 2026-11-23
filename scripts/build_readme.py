@@ -70,23 +70,27 @@ def main() -> None:
     rh = head.get("rolling_horizon")
     if rh:
         v = rh["vs_fabtwin_pct"]["mean_weighted_tardiness_h"]
-        headline += (f"\n* **Rolling-horizon CP-SAT litho planning** on top of the FabTwin policy: weighted tardiness "
-                     f"{ci(v)} over {rh['replications']} paired replications. Reported because it was run, "
-                     "including when it does not help.")
+        cr = rh["vs_fabtwin_pct"]["mean_ct_days"]
+        headline += (f"\n* **Rolling-horizon CP-SAT litho planning** on top of the FabTwin policy did not help: weighted "
+                     f"tardiness {ci(v)} (not significant), cycle time {ci(cr)} over {rh['replications']} paired "
+                     "replications. It is reported because it was run.")
     wt_cr = hd("mean_weighted_tardiness_h", "CR baseline")
     ct_cr = hd("mean_ct_days", "CR baseline")
     cv = "\n".join([
         "**CV bullets** (each number traces to `results/`):", "",
         f"* Built a 3D digital twin of a semiconductor fab (re-entrant flexible job shop with batching, setups, "
-        f"Q-time, OHT transport, stochastic failures). Cut weighted tardiness by {-wt_cr['mean']:.0f}% "
-        f"(95% CI ±{wt_cr['hw']:.0f}%) and cycle time by {-ct_cr['mean']:.1f}% vs critical-ratio dispatching "
-        f"over {head['replications']} common-random-number replications.",
+        f"Q-time, OHT transport, stochastic failures). Cut mean cycle time by {-ct_cr['mean']:.1f}% "
+        f"(95% CI ±{ct_cr['hw']:.1f}%) and weighted tardiness by {-wt_cr['mean']:.0f}% vs critical-ratio "
+        f"dispatching over {head['replications']} paired common-random-number replications.",
         f"* Formulated CP-SAT and time-indexed MIP (HiGHS) models as ground truth: proved optimality on "
         f"{n_opt}/{len(small)} instances and measured dispatching rules at {gap('rule'):.0f}% and ALNS at "
-        f"{gap('alns'):.0f}% above optimum. Showed the CP-SAT/ALNS crossover beyond ~250 operations.",
-        f"* Optimised preventive-maintenance intervals by simulation (CRN, screen-and-select). The robust policy "
-        f"changed unplanned downtime by {md_rob['down_frac vs Run-to-failure']['mean']:+.0f}% vs run-to-failure and "
-        f"cycle time by {md_rob['mean_ct_days vs ' + ref_n]['mean']:+.1f}% vs the availability-optimal plan.",
+        f"{gap('alns'):.0f}% above optimum. Showed that with a 60 s limit ALNS overtakes CP-SAT between 240 and 480 operations.",
+        f"* Optimised preventive-maintenance intervals under Weibull failures by simulation (common random "
+        f"numbers, screen-and-select). Cut unplanned downtime by "
+        f"{-md_rob['down_frac vs Run-to-failure']['mean']:.0f}% and cycle time by "
+        f"{-md_rob['mean_ct_days vs Run-to-failure']['mean']:.1f}% vs run-to-failure, and showed the analytical "
+        f"age-replacement plan is statistically indistinguishable on cycle time "
+        f"({md_rob['mean_ct_days vs ' + ref_n]['mean']:+.1f}% ± {md_rob['mean_ct_days vs ' + ref_n]['hw']:.1f}%).",
     ])
     instance = (f"Benchmark fab `{inst['name']}`: **{inst['tool_groups']} tool groups, {inst['machines']} machines "
                 f"(1–6 per group), {inst['products']} products, routes of {min(inst['route_steps'])}–"
@@ -95,9 +99,9 @@ def main() -> None:
                 f"{inst['hot_lots_per_day']:.2f} hot lots/day.")
     warm = ""
     if (RES / "warmup" / "summary.md").exists():
-        warm = "**Warm-up sensitivity.** MSER-5 points at a slightly later truncation than the 30 days used, so the key comparison was repeated with 40 days on the same seeds:
-
-" + md("warmup/summary.md")
+        warm = ("**Warm-up sensitivity.** MSER-5 points at a slightly later truncation than the 30 days "
+                "used, so the key comparison was repeated with 40 days on the same seeds:\n\n"
+                + md("warmup/summary.md"))
     gp_txt = ("Not run.")
     if (RES / "learned" / "gp.json").exists():
         g = j("learned/gp.json")
@@ -109,7 +113,10 @@ def main() -> None:
                   f"remaining work, waiting time, weight, Q-time left, critical ratio) by tree GP with fitness measured on "
                   f"training seeds, then tests the best rule on {g['test_reps']} held-out seeds. Best rule: `{g['expr']}`. "
                   f"Held-out weighted tardiness {g['gp']['mean']:.2f} ± {g['gp']['hw']:.2f} h vs {b} "
-                  f"{g[b]['mean']:.2f} ± {g[b]['hw']:.2f} h (paired change {d['mean']:+.1f}% ± {d['hw']:.1f}%). {verdict}")
+                  f"{g[b]['mean']:.2f} ± {g[b]['hw']:.2f} h (paired change {d['mean']:+.1f}% ± {d['hw']:.1f}%). It does beat "
+                  f"ATC ({g['vs_ATC_pct']['mean']:+.1f}% ± {g['vs_ATC_pct']['hw']:.1f}%) and CR "
+                  f"({g['vs_CR_pct']['mean']:+.1f}% ± {g['vs_CR_pct']['hw']:.1f}%): it lacks a setup feature, which is "
+                  f"exactly what makes ATCS strong at the litho bottleneck. {verdict}")
     out = (tpl.replace("{{WARMUP}}", warm).replace("{{GP}}", gp_txt).replace("{{HEADLINE}}", headline).replace("{{CV}}", cv).replace("{{INSTANCE}}", instance)
            .replace("{{DISPATCH}}", md("dispatch/summary.md")).replace("{{EXACT}}", md("exact/summary.md"))
            .replace("{{OHT}}", md("oht/summary.md")).replace("{{MAINT}}", md("maintenance/summary.md"))

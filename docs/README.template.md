@@ -85,7 +85,7 @@ $$\min \sum_j w_j T_j \quad \text{s.t.}\quad \sum_{m\in M_o} x_{om}=1,\ \ S_{o_{
 * **Horizon and warm-up.** 120 simulated days per replication. The 30-day warm-up was checked with MSER-5 on the across-replication mean daily WIP (figure below).
 * **Replications.** 200 per policy for dispatching, maintenance validation and the headline comparison; 60 for the OHT fleet study; 20 for the (expensive) rolling-horizon CP-SAT policy. Intervals are two-sided 95% Student-t.
 * **Common random numbers.** Every random quantity comes from its own stream keyed by (seed, source, entity): one per lot (processing noise, rework draws), per machine (failures, repairs, PM durations, batch noise), plus releases and hot lots. Policies compared on the same seeds therefore face the same lots and failure clocks, and differences are reported as **paired** CIs.
-* **Sanity checks.** Little's Law ($L=\lambda W$, including scrapped lots) holds within about 1% in every policy; the sample-path identity area(WIP) = Σ time-in-system is tested exactly; stability is checked as output rate = input rate (tests).
+* **Sanity checks.** Little's Law ($L=\lambda W$, including scrapped lots) holds within 0.7–1.4% (mean relative error per policy, last column of the dispatching table); the sample-path identity area(WIP) = Σ time-in-system is tested exactly; stability is checked as output rate = input rate (tests).
 
 ![Warm-up](docs/figures/warmup.png)
 
@@ -135,6 +135,12 @@ $$\min \sum_j w_j T_j \quad \text{s.t.}\quad \sum_{m\in M_o} x_{om}=1,\ \ S_{o_{
 
 ![Headline](docs/figures/headline.png)
 
+**Reading.**
+* **Where the gain comes from.** Most of the improvement comes from setup-aware litho dispatching (ATCS): fewer reticle changes free scanner capacity at the bottleneck, which shortens every queue in front of it. Optimised PM adds a further cycle-time reduction by removing about a third of unplanned downtime. Hungarian OHT assignment contributes little at fab level (see step 4).
+* **Weighted tardiness intervals are wide** relative to their means because tardiness is heavy-tailed: most replications have almost no late lots, and a few, with clustered scanner failures, have many. Cycle time and on-time delivery are the more stable comparisons.
+* **Trade-off.** Q-time violations roughly double compared with FIFO. Due-date and setup-oriented rules pull lots through the clean step faster than the furnaces batch them, while FIFO happens to pace the Q-time zone well. A Q-time-aware release gate is the obvious next step and is not claimed here.
+* **Rolling horizon.** Rolling-horizon CP-SAT litho planning on top of the FabTwin policy did not help in the stochastic fab: weighted tardiness was not significantly different and cycle time was slightly worse. The plan is stale between re-planning epochs (8 h) under failures and processing-time noise, and ATCS already reacts to the loaded reticle in real time. This is consistent with the static results, where the decomposition helps most on small, deterministic instances.
+
 ### Stretch goal: evolved dispatching rules (genetic programming)
 
 {{GP}}
@@ -162,7 +168,7 @@ React + TypeScript + Vite + Tailwind + react-three-fiber/drei with bloom. It rep
 * **Not modelled:** operators, reticle availability and pod logistics, engineering holds, send-ahead wafers, tool chambers as separate resources, or yield beyond rework and Q-time scrap.
 * **Failures** run on calendar time and renew at repair and PM (as good as new); a failure pauses the current job (preempt-resume).
 * **Transport.** Point vehicles at constant speed (3 m/s) without acceleration; idle vehicles park on stocker spurs off the running rail; delivery is to the bay stocker, and the stocker-to-tool hand-off is instantaneous.
-* **Releases** follow a renewal process with CV 1 (no CONWIP or start-rate control). The operating point is chosen so the fab is stable over 300 days on several instance seeds; the x-factor (about 1.9–2.2) is lower than in many real fabs because there are fewer sources of variability.
+* **Releases** follow a renewal process with CV 1 (no CONWIP or start-rate control). The operating point is chosen so the fab is stable over 300 days on several instance seeds; the x-factor (1.7–2.0 across rules in the dispatching table) is lower than in many real fabs because there are fewer sources of variability.
 * **Static instances** for exact methods are WIP snapshots with 0.1 h time resolution and deterministic durations; the MIP horizon is 1.25× the best heuristic makespan.
 * **ALNS** is limited by its schedule-generation scheme (see the gap table). It is reported as measured.
 * **Learned dispatching (stretch goal):** see the section below; it is reported only if it beats the best baseline on held-out seeds.

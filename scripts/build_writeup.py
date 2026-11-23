@@ -67,13 +67,38 @@ def main() -> None:
         f"<tr><td>{r['policy']}</td><td>{pm(r['mean_ct_days'], 3)}</td><td>{pm(r['mean_weighted_tardiness_h'], 2)}</td>"
         f"<td>{100 * r['down_frac']['mean']:.2f}%</td><td>{100 * r['pm_frac']['mean']:.2f}%</td></tr>"
         for r in mnt["rows"])
+    by_ops: dict = {}
+    for r in scaling:
+        by_ops.setdefault(r["ops"], []).append(r)
+    scale_ok = max((o for o, rs in by_ops.items()
+                    if all(x["cpsat_obj"] is not None and x["cpsat_obj"] <= x["alns"] for x in rs)), default=0)
+    gp = json.loads((RES / "learned" / "gp.json").read_text()) if (RES / "learned" / "gp.json").exists() else None
+    warm = json.loads((RES / "warmup" / "summary.json").read_text()) if (RES / "warmup" / "summary.json").exists() else None
+    q_fifo = next(x for x in head["deltas"] if x["kpi"] == "qtime_viol_pct" and x["ref"] == "FIFO baseline")
+    hung = [r for r in oht["rows"] if r["policy"] == "hungarian"]
+    oht_txt = "; ".join(f"{r['vehicles']} vehicles {r['oht_mean_wait_min_vs_nearest_pct']['mean']:+.1f}% ± "
+                        f"{r['oht_mean_wait_min_vs_nearest_pct']['hw']:.1f}%" for r in hung)
+    gp_txt = ""
+    if gp:
+        b = gp["best_baseline"]
+        gp_txt = (f"Tree GP evolved a priority expression on training seeds; on {gp['test_reps']} held-out seeds it beat "
+                  f"ATC ({gp['vs_ATC_pct']['mean']:+.1f}% ± {gp['vs_ATC_pct']['hw']:.1f}% weighted tardiness) and CR "
+                  f"({gp['vs_CR_pct']['mean']:+.1f}% ± {gp['vs_CR_pct']['hw']:.1f}%) but not the setup-aware {b} "
+                  f"({gp['vs_' + b + '_pct']['mean']:+.0f}%), so it is not used in any policy.")
+    warm_txt = ""
+    if warm:
+        a30, a40 = warm["atcs_vs_cr_mean_weighted_tardiness_h_30d"], warm["atcs_vs_cr_mean_weighted_tardiness_h_40d"]
+        warm_txt = (f"Re-running the ATCS-vs-CR comparison with a 40-day warm-up gives {a40['mean']:+.1f}% ± {a40['hw']:.1f}% "
+                    f"weighted tardiness (vs {a30['mean']:+.1f}% ± {a30['hw']:.1f}% with 30 days).")
     rh = head.get("rolling_horizon")
     rh_txt = ""
     if rh:
         v = rh["vs_fabtwin_pct"]["mean_weighted_tardiness_h"]
-        rh_txt = (f"Adding the rolling-horizon CP-SAT litho planner on top changed weighted tardiness by "
-                  f"{v['mean']:+.1f}% ± {v['hw']:.1f}% ({rh['replications']} paired replications), "
-                  "so ATCS already captures most of the litho sequencing value at this load.")
+        c = rh["vs_fabtwin_pct"]["mean_ct_days"]
+        rh_txt = (f"Adding rolling-horizon CP-SAT litho planning (every 8 h) on top did not help: weighted tardiness "
+                  f"{v['mean']:+.1f}% ± {v['hw']:.1f}% (not significant) and cycle time {c['mean']:+.1f}% ± "
+                  f"{c['hw']:.1f}% ({rh['replications']} paired replications). Plans go stale under failures, while "
+                  "ATCS reacts to the loaded reticle in real time.")
     html = f"""<!doctype html><html><head><meta charset="utf-8"><title>FabTwin write-up</title>
 <style>
 @page {{ size: A4; margin: 13mm 14mm; }}
@@ -99,7 +124,7 @@ b {{ font-weight: 600; }}
 <h2>Methods</h2>
 <p><b>Exact.</b> A CP-SAT model (optional intervals, circuit constraints for sequence-dependent setups, pairwise batch synchronisation with a cumulative capacity, hard Q-time) and a time-indexed MIP solved with HiGHS give optima and lower bounds on static snapshot instances. <b>Heuristics.</b> Classic rules (FIFO, SPT, EDD, ODD, CR, ATC), setup-aware ATCS, a bottleneck-first decomposition that sequences litho with CP-SAT and dispatches the rest around it, and ALNS with problem-specific operators (batch merge, setup-aware litho resequencing, Q-time repair) on priority vectors decoded by active/non-delay schedule generation. <b>Transport.</b> Vehicles are assigned per decision epoch with the Hungarian algorithm (priority credits for hot and Q-time lots), routed by congestion-aware A*, and booked with headway time-window reservations, which excludes collisions and deadlocks by construction. <b>Maintenance.</b> Age-based PM: the nominal plan minimises per-tool downtime analytically (renewal reward); the robust plan is selected in the stochastic simulator by two-stage screening and selection with common random numbers, then validated on fresh seeds. <b>Simulation methodology.</b> Own event engine; 120-day runs, 30-day warm-up (MSER-5 suggests day {disp['warmup']['mser5_truncation_day']}), {disp['replications']} replications, CRN via per-entity random streams, paired 95% t-intervals. Little's law holds within {100 * max(r['little_rel_err']['mean'] for r in disp['rules'].values()):.1f}% on average.</p>
 <h2>Exact vs heuristic</h2>
-<p>CP-SAT proved optimality on {len(opt_rows)}/{len(small)} small instances (≤{max(r['ops'] for r in small)} operations); the time-indexed MIP reached proven optimality on {len(mip_opt)} of them and agreed with CP-SAT on all {agree}. Mean gap to the optimum on instances with a non-zero optimum: best dispatching rule {mean_gap('rule'):.1f}%, bottleneck-first decomposition {mean_gap('sbh'):.1f}%, ALNS {mean_gap('alns'):.1f}%. CP-SAT scales to {max(r['ops'] for r in scaling)} operations within 60 s but its lower bound weakens quickly (figure).</p>
+<p>CP-SAT proved optimality on {len(opt_rows)}/{len(small)} small instances (≤{max(r['ops'] for r in small)} operations); the time-indexed MIP reached proven optimality on {len(mip_opt)} of them and agreed with CP-SAT on all {agree}. Mean gap to the optimum on instances with a non-zero optimum: best dispatching rule {mean_gap('rule'):.1f}%, bottleneck-first decomposition {mean_gap('sbh'):.1f}%, ALNS {mean_gap('alns'):.1f}%. With a 60 s limit CP-SAT still gives the best solutions at {scale_ok} operations, but beyond that it fails to find good (or any) solutions, while ALNS keeps improving on the rules, which is the crossover that motivates decomposition and metaheuristics at fab scale.</p>
 <div class="fig">{img('exact_gaps.png')}</div>
 <h2>Coupled fab results</h2>
 <table><tr><th>Policy ({head['replications']} reps)</th><th>W. tardiness (h)</th><th>CT (days)</th><th>On-time %</th><th>Q-time viol. %</th></tr>{rows_head}</table>
@@ -108,7 +133,14 @@ b {{ font-weight: 600; }}
 <h2>Maintenance: robust vs nominal</h2>
 <table><tr><th>Policy ({mnt['validation_reps']} fresh reps)</th><th>CT (days)</th><th>W. tard. (h)</th><th>Down</th><th>PM</th></tr>{rows_m}</table>
 <p>Selected multipliers: litho {mnt['selected']['m_litho']}, other tools {mnt['selected']['m_other']}. Robust vs nominal: cycle time {mnt['deltas']['mean_ct_days vs Nominal PM (availability-optimal)']['mean']:+.1f}% ± {mnt['deltas']['mean_ct_days vs Nominal PM (availability-optimal)']['hw']:.1f}%, unplanned downtime {mnt['deltas']['down_frac vs Nominal PM (availability-optimal)']['mean']:+.1f}% ± {mnt['deltas']['down_frac vs Nominal PM (availability-optimal)']['hw']:.1f}%; versus run-to-failure, unplanned downtime {mnt['deltas']['down_frac vs Run-to-failure']['mean']:+.1f}% ± {mnt['deltas']['down_frac vs Run-to-failure']['hw']:.1f}%.</p>
-<div class="fig">{img('oht.png')}<div class="cap">OHT: fleet size vs vehicle dispatching ({oht['replications']} CRN replications, ATCS dispatching).</div></div>
+<h2>Transport</h2>
+<p>Hungarian assignment vs nearest-vehicle FCFS, change in mean wait for a vehicle: {oht_txt} ({oht['replications']} CRN replications). Fab-level KPIs did not change significantly: a move takes 1.5–2 min against a cycle time of days, and Q-time violations come from furnace queueing.</p>
+<div class="fig">{img('oht.png')}</div>
+<h2>Scaling and Pareto front</h2>
+<div class="fig">{img('scaling.png', '49%')} {img('pareto.png', '49%')}<div class="cap">Left: mean weighted tardiness vs instance size (2 seeds per size). Right: exact weighted-tardiness / flow-time front by lexicographic ε-constraint on one 80-operation instance, with heuristic points.</div></div>
+<h2>Trade-offs and robustness checks</h2>
+<p><b>Q-time.</b> The FabTwin policy has {q_fifo['mean']:.0f}% (± {q_fifo['hw']:.0f}%) more Q-time violations than FIFO: due-date- and setup-oriented rules pull lots through the clean step faster than furnaces batch them. A Q-time-aware release gate is the natural next step. <b>Warm-up.</b> {warm_txt} <b>Learned dispatching.</b> {gp_txt}</p>
+<div class="fig">{img('maintenance.png')}</div>
 <h2>Limitations</h2>
 <p>Synthetic fab (SMT2020 structure, not its data); no operator, reticle-availability or engineering-hold constraints; point vehicles at constant speed, stocker-to-tool hand-off instantaneous; failures on calendar time with preempt-resume; static exact models use 0.1 h discretisation; ALNS is limited by its schedule-generation scheme (reported gaps show it). The browser what-if mode is a simplified TypeScript port; all reported numbers come from the Python engine and are regenerated by <i>make bench</i>.</p>
 </div></body></html>"""
