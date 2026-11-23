@@ -29,7 +29,7 @@ export interface Analytics {
       alns: number | null;
     }[];
   };
-  scaling?: { rows: { lots: number; cpsat_s: number; alns_s: number; gap_pct: number }[] };
+  scaling?: { rows: { lots: number; ops: number; best_rule: number; alns: number; cpsat_obj: number | null; cpsat_bound: number; cpsat_s: number; alns_s: number }[] };
   pareto?: { x: string; y: string; points: { method: string; x: number; y: number; front: boolean }[] };
   convergence?: { series: { name: string; iter: number[]; best: number[]; current?: number[] }[] };
   oht?: { rows: ({ vehicles: number; policy: string } & Record<string, unknown>)[] };

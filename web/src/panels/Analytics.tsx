@@ -40,7 +40,7 @@ export default function Analytics({ data, index }: { data: AnalyticsData | null;
             </Figure>
           )}
           {data?.scaling && (
-            <Figure title="Solver scaling" note="runtime as instances grow">
+            <Figure title="Solver scaling" note="solution quality as instances grow">
               <Scaling d={data.scaling} />
             </Figure>
           )}
@@ -89,7 +89,7 @@ function Pending() {
 
 const SECTIONS: { key: keyof AnalyticsData; title: string; what: string }[] = [
   { key: 'exact', title: 'Exact vs heuristic', what: 'CP-SAT and MIP optima and bounds against dispatching rules and ALNS on small instances' },
-  { key: 'scaling', title: 'Solver scaling', what: 'runtime and gap as the instance grows' },
+  { key: 'scaling', title: 'Solver scaling', what: 'solution quality as the instance grows' },
   { key: 'pareto', title: 'Pareto front', what: 'trade-off between competing objectives' },
   { key: 'convergence', title: 'Search convergence', what: 'best and current objective by ALNS iteration' },
   { key: 'oht', title: 'OHT fleet', what: 'vehicle count and assignment policy against wait time and Q-time violations' },
@@ -470,32 +470,59 @@ function ExactTable({ d }: { d: NonNullable<AnalyticsData['exact']> }) {
 
 function Scaling({ d }: { d: NonNullable<AnalyticsData['scaling']> }) {
   const [ref, w] = useWidth<HTMLDivElement>(600);
-  const rows = [...d.rows].sort((a, b) => a.lots - b.lots);
-  if (rows.length < 2) return <CITable rows={rows as unknown as Record<string, unknown>[]} />;
+  // average the seeds per size; a series is drawn only where every seed has a value
+  const sizes = [...new Set(d.rows.map((r) => r.ops))].sort((a, b) => a - b);
+  type Key = 'best_rule' | 'alns' | 'cpsat_obj' | 'cpsat_bound';
+  const series: { key: Key; label: string; color: string; dash?: string }[] = [
+    { key: 'best_rule', label: 'best rule', color: 'var(--p-ink-3)' },
+    { key: 'alns', label: 'ALNS (30 s)', color: CAT[1] },
+    { key: 'cpsat_obj', label: 'CP-SAT (60 s)', color: CAT[0] },
+    { key: 'cpsat_bound', label: 'CP-SAT bound', color: CAT[0], dash: '3 3' },
+  ];
+  const pts = (k: Key) =>
+    sizes.flatMap((s) => {
+      const rs = d.rows.filter((r) => r.ops === s);
+      const vs = rs.map((r) => r[k]);
+      if (vs.some((v) => v === null || v === undefined || !(v > 0))) return [];
+      return [{ s, v: (vs as number[]).reduce((a, b) => a + b, 0) / vs.length }];
+    });
+  if (sizes.length < 2) return <CITable rows={d.rows as unknown as Record<string, unknown>[]} />;
   const h = 220;
-  const pad = { l: 46, r: 16, t: 12, b: 32 };
-  const x = scaleLinear().domain([rows[0].lots, rows[rows.length - 1].lots]).range([pad.l, w - pad.r]);
-  const all = rows.flatMap((r) => [r.cpsat_s, r.alns_s]).filter((v) => v > 0);
+  const pad = { l: 52, r: 16, t: 12, b: 32 };
+  const x = scaleLinear().domain([sizes[0], sizes[sizes.length - 1]]).range([pad.l, w - pad.r]);
+  const all = series.flatMap((s) => pts(s.key).map((p) => p.v));
   const y = scaleLog().domain([Math.min(...all) * 0.8, Math.max(...all) * 1.25]).range([h - pad.b, pad.t]);
-  const line = (k: 'cpsat_s' | 'alns_s') => rows.filter((r) => r[k] > 0).map((r, i) => `${i ? 'L' : 'M'}${x(r.lots)},${y(r[k])}`).join('');
+  const missing = sizes.filter((s) => pts('cpsat_obj').every((p) => p.s !== s));
   return (
     <div ref={ref}>
-      <svg width={w} height={h} className="block" role="img" aria-label="Solver runtime against instance size, log scale">
-        {y.ticks(4).map((v) => (
+      <svg width={w} height={h} className="block" role="img" aria-label="Weighted tardiness against instance size, log scale">
+        {y.ticks(4).filter((v) => Math.abs(Math.log10(v) - Math.round(Math.log10(v))) < 1e-9).map((v) => (
           <g key={v}>
             <line x1={pad.l} x2={w - pad.r} y1={y(v)} y2={y(v)} stroke="var(--p-line)" strokeDasharray="1 3" />
-            <text x={pad.l - 6} y={y(v) + 3} textAnchor="end" fontSize={10} className="num" fill="var(--p-ink-3)">{fmt(v, v < 1 ? 1 : 0)}s</text>
+            <text x={pad.l - 6} y={y(v) + 3} textAnchor="end" fontSize={10} className="num" fill="var(--p-ink-3)">{fmt(v, 0)}</text>
           </g>
         ))}
-        {rows.map((r) => (
-          <text key={r.lots} x={x(r.lots)} y={h - 12} textAnchor="middle" fontSize={10} className="num" fill="var(--p-ink-3)">{r.lots}</text>
+        {sizes.map((s) => (
+          <text key={s} x={x(s)} y={h - 12} textAnchor="middle" fontSize={10} className="num" fill="var(--p-ink-3)">{s}</text>
         ))}
-        <path d={line('cpsat_s')} fill="none" stroke={CAT[0]} strokeWidth={1.5} />
-        <path d={line('alns_s')} fill="none" stroke={CAT[1]} strokeWidth={1.5} />
-        <text x={w - pad.r} y={pad.t + 10} textAnchor="end" fontSize={11} fill={CAT[0]}>CP-SAT</text>
-        <text x={w - pad.r} y={pad.t + 24} textAnchor="end" fontSize={11} fill={CAT[1]}>ALNS</text>
+        {series.map((se) => {
+          const p = pts(se.key);
+          return (
+            <g key={se.key}>
+              <path d={p.map((q, i) => `${i ? 'L' : 'M'}${x(q.s)},${y(q.v)}`).join('')} fill="none" stroke={se.color}
+                strokeWidth={1.5} strokeDasharray={se.dash} />
+              {p.map((q) => <circle key={q.s} cx={x(q.s)} cy={y(q.v)} r={2.5} fill={se.color} />)}
+            </g>
+          );
+        })}
+        {series.map((se, i) => (
+          <text key={se.key} x={w - pad.r} y={h - pad.b - 8 - 14 * (series.length - 1 - i)} textAnchor="end" fontSize={11} fill={se.color}>{se.label}</text>
+        ))}
       </svg>
-      <p className="mt-1 text-xs text-pink3">x: lots in the instance; ALNS gap to CP-SAT at the largest size: <span className="num text-pink">{fmt(rows[rows.length - 1].gap_pct, 1)}%</span></p>
+      <p className="mt-1 text-xs text-pink3">
+        x: operations; y: mean weighted tardiness (log). CP-SAT wins on small instances
+        {missing.length ? `; at ${missing.join(' and ')} operations at least one seed had no CP-SAT solution within 60 s` : ''}.
+      </p>
     </div>
   );
 }
